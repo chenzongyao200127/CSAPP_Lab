@@ -78,7 +78,7 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 /* Debug option */
-#define VERBOSE 1;
+#define VERBOSE 0
 
 
 /* Global variables */
@@ -88,18 +88,21 @@ static char *dummy_blockp = 0;      /* Pointer to first dummy free block */
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
 void mm_check(int verbose);
+
+// free list manipulate
 static void add_to_free_list(char *bp);
 static int is_in_free_list(char *bp);
 static void remove_from_free_list(char* bp);
+
 static void *coalesce(char *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
+
 /* 
  * mm_init - initialize the malloc package.
  */
-int mm_init(void)
-{
+int mm_init(void) {
     /* Initialize the heap list pointer to create an empty heap. 
        Allocate memory space for the additional blocks, checking for failure. */
     if ((heap_listp = mem_sbrk((4 + 2) * WSIZE)) == (void *) - 1) // Allocate space for dummy block and its pointers
@@ -113,12 +116,12 @@ int mm_init(void)
     PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1)); 
 
     /* Initialize the dummy block. */
-    PUT(heap_listp + (3 * WSIZE), PACK(DSIZE, 1)); // Dummy block header
-    PUT(heap_listp + (4 * WSIZE), 0); // Dummy block predecessor pointer (null)
-    PUT(heap_listp + (5 * WSIZE), 0); // Dummy block successor pointer (null)
-    PUT(heap_listp + (6 * WSIZE), PACK(DSIZE, 1)); // Dummy block footer
-
     dummy_blockp = heap_listp + (4 * WSIZE); // set global dummy pointer
+
+    PUT(heap_listp + (3 * WSIZE), PACK(DSIZE, 1)); // Dummy block header
+    PUT(heap_listp + (4 * WSIZE), dummy_blockp); // Dummy block predecessor pointer -> self
+    PUT(heap_listp + (5 * WSIZE), dummy_blockp); // Dummy block successor pointer   -> self
+    PUT(heap_listp + (6 * WSIZE), PACK(DSIZE, 1)); // Dummy block footer
 
     /* Set up the epilogue header, which is now two blocks further. */
     PUT(heap_listp + (7 * WSIZE), PACK(0, 1));     
@@ -129,8 +132,6 @@ int mm_init(void)
     /* Extend the heap with a free block of size CHUNKSIZE. */
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
-
-    mm_check(1);    
 
     /* If everything is successful, return 0 indicating successful initialization. */
     return 0;
@@ -145,20 +146,28 @@ static void *extend_heap(size_t words) {
 
     /* Allocate an even number of words to maintain alignment */
     size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
+    char *old_dummy_succ = GET_SUCC(dummy_blockp); // Store old successor of dummy block
+
     if ((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
+
+    /* After extending the heap, check if dummy block needs to be updated */
+    if (old_dummy_succ != dummy_blockp) {
+        // If the old successor of dummy block was not itself, update its pointers
+        SET_PRED(old_dummy_succ, dummy_blockp);
+        SET_SUCC(dummy_blockp, old_dummy_succ);
+    }
 
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
-    /* Add the new free block to the free list */
-    add_to_free_list(bp);
-
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
+
+
 
 
 /* 
@@ -180,6 +189,8 @@ void *mm_malloc(size_t size) {
         return NULL;
     }
 
+    mm_check(VERBOSE); 
+
     // Adjust block size to include overhead and alignment requirements
     if (size <= DSIZE) {
         asize = 2 * DSIZE; // Minimum block size
@@ -200,6 +211,10 @@ void *mm_malloc(size_t size) {
         return NULL; // Return NULL if unable to extend heap
     }
     place(bp, asize); // Place the block in the new heap space
+    
+    printf("[*] malloc ok");
+    mm_check(VERBOSE); 
+    
     return bp;
 }
 
@@ -210,7 +225,7 @@ static void *find_fit(size_t asize) {
     void *bp;
 
     // Start the search from the block following the dummy block in the free list
-    for (bp = GET_SUCC(dummy_blockp); bp != NULL; bp = GET_SUCC(bp)) {
+    for (bp = GET_SUCC(dummy_blockp); bp != dummy_blockp; bp = GET_SUCC(bp)) {
         if (asize <= GET_SIZE(HDRP(bp))) {
             return bp; // Found a block that is large enough
         }
@@ -266,6 +281,8 @@ void mm_free(void *bp)
 
     // Coalesce, if possible, with adjacent free blocks.
     coalesce(bp);
+
+    mm_check(VERBOSE); 
 }
 
 
@@ -342,28 +359,23 @@ void *mm_realloc(void *ptr, size_t size) {
 /*
  * printblock - Prints the details of a block pointed to by bp.
  */
-static void printblock(void *bp) 
-{
-    size_t hsize, halloc, fsize, falloc; // Declare variables for size and allocation status.
+static void printblock(void *bp) {
+    size_t hsize, halloc; // Declare variables for size and allocation status.
 
-    checkheap(0); // Check the heap for consistency without verbose output.
+    checkheap(VERBOSE); // Check the heap for consistency with verbose output.
 
-    // Retrieve size and allocation status from both the header and footer of the block.
+    // Retrieve size and allocation status from the block's header.
     hsize = GET_SIZE(HDRP(bp));
     halloc = GET_ALLOC(HDRP(bp));  
-    fsize = GET_SIZE(FTRP(bp));
-    falloc = GET_ALLOC(FTRP(bp));  
 
     // If the block size is zero, it's the end of the list. Print EOL and return.
     if (hsize == 0) {
-        printf("%p: EOL\n", bp);
+        printf("Line %d - %p: EOL\n", __LINE__, bp);
         return;
     }
 
-    // Print the block pointer and details about the block's header and footer.
-    printf("%p: header: [%ld:%c] footer: [%ld:%c]\n", bp, 
-           hsize, (halloc ? 'a' : 'f'), 
-           fsize, (falloc ? 'a' : 'f')); 
+    // Print the block pointer and details about the block's header.
+    printf("%p: header: [%ld:%c]\n", bp, hsize, (halloc ? 'a' : 'f'));
 }
 
 /*
@@ -373,36 +385,30 @@ static void checkblock(void *bp)
 {
     // Check if the block pointer is doubleword aligned (8-byte aligned).
     if ((size_t)bp % 8)
-        printf("Error: %p is not doubleword aligned\n", bp);
+        printf("Line %d Error: %p is not doubleword aligned\n", __LINE__, bp);
 
     // Check if the header and footer of the block match.
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
-        printf("Error: header does not match footer\n");
+        printf("Line %d Error: header does not match footer\n", __LINE__);
 }
 
 
 /*
  * check_freelist() - Checks heap Free list
  */
-static void check_freelist() {
-    char *bp = heap_listp; // Set bp (block pointer) to start of the heap.
+static int check_freelist() {
+    char *bp;
 
     // Loop through all blocks in the free list
-    for (bp = GET_SUCC(dummy_blockp); bp != NULL; bp = GET_SUCC(bp)) {
+    for (bp = GET_SUCC(dummy_blockp); bp != dummy_blockp; bp = GET_SUCC(bp)) {
         // Check if the current block is allocated, which should not be the case for blocks in the free list
-        if (GET_ALLOC(bp)) {
+        if (GET_ALLOC(HDRP(bp))) {
             printf("Line %d: Allocated block found in free list at %p\n", __LINE__, bp);
             return 0;
         }
 
-        // This condition appears to be a duplicate of the previous one and might be an error
-        if (GET_ALLOC(bp)) {
-            printf("Line %d: Invalid or allocated block in free list at %p\n", __LINE__, bp);
-            return 0;
-        }
-
         // Check if there are contiguous free blocks that should have been coalesced
-        if (!GET_ALLOC(bp) && !GET_ALLOC(PREV_BLKP(bp))) {
+        if (!GET_ALLOC(HDRP(bp)) && !GET_ALLOC(HDRP(PREV_BLKP(bp)))) {
             printf("Line %d: Contiguous free blocks that escaped coalescing found.\n", __LINE__);
             return 0;
         }
@@ -410,12 +416,15 @@ static void check_freelist() {
 
     // Check if every free block is actually in the free list
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(bp) && !is_in_free_list(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && !is_in_free_list(bp)) {
             printf("Line %d: Free block not in free list found at %p\n", __LINE__, bp);
             return 0;
         }
     }
+
+    return 1; // Return 1 to indicate successful check if no errors were found
 }
+
 
 
 /* 
@@ -460,7 +469,7 @@ void checkheap(int verbose)
         printf("Bad epilogue header\n");
 
     // check free list
-    check_freelist();
+    assert(1 == check_freelist());
 }
 
 
@@ -479,20 +488,23 @@ void mm_check(int verbose) {
  * add_to_free_list - give a free block pointer bp, add this block to the LIFO queue
  */
 static void add_to_free_list(char *bp) {
-    /* Set the successor of the new block to be the current successor of the dummy block */
-    SET_SUCC(bp, GET_SUCC(dummy_blockp));
+    char *next_bp = GET_SUCC(dummy_blockp);
 
-    /* Set the predecessor of the new block to be the dummy block */
+    // Set the successor of the new block to be the current successor of the dummy block
+    SET_SUCC(bp, next_bp);
+
+    // Set the predecessor of the successor of the dummy block to be the new block
+    SET_PRED(next_bp, bp);
+
+    // Set the predecessor of the new block to be the dummy block
     SET_PRED(bp, dummy_blockp);
 
-    /* If the dummy block's successor is not NULL, update its predecessor to the new block */
-    if (GET_SUCC(dummy_blockp) != NULL) {
-        SET_PRED(GET_SUCC(dummy_blockp), bp);
-    }
-
-    /* Update the dummy block's successor to the new block */
+    // Update the dummy block's successor to the new block
     SET_SUCC(dummy_blockp, bp);
 }
+
+
+
 
 /* 
  * is_in_free_list - give a free block pointer bp, check whether it is in the free list
@@ -500,8 +512,8 @@ static void add_to_free_list(char *bp) {
 static int is_in_free_list(char *bp) {
     char *current_bp = GET_SUCC(dummy_blockp); // Start from the first block in the free list
 
-    // Traverse the free list
-    while (current_bp != NULL) {
+    // Traverse the free list until we loop back to the dummy block
+    while (current_bp != dummy_blockp) {
         if (current_bp == bp) {
             return 1; // Found the block in the free list
         }
@@ -511,6 +523,7 @@ static int is_in_free_list(char *bp) {
     return 0; // Block not found in the free list
 }
 
+
 /*
  * remove_from_free_list - given a free block pointer bp, remove it from the free block list
  */
@@ -518,15 +531,6 @@ static void remove_from_free_list(char *bp) {
     char *prev_bp = GET_PRED(bp);
     char *next_bp = GET_SUCC(bp);
 
-    /* If bp is the first block in the free list (after the dummy block) */
-    if (prev_bp == dummy_blockp) {
-        SET_SUCC(dummy_blockp, next_bp);
-    } else {
-        SET_SUCC(prev_bp, next_bp);
-    }
-
-    /* If bp is not the last block in the free list */
-    if (next_bp != NULL) {
-        SET_PRED(next_bp, prev_bp);
-    }
+    SET_SUCC(prev_bp, next_bp);
+    SET_PRED(next_bp, prev_bp);
 }
