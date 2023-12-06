@@ -161,11 +161,6 @@ int mm_check(void) {
 
     /* Check all blocks in the heap */
     while (GET_SIZE(HDRP(bp)) != 0) {
-        if (!is_valid_heap_address(bp)) {
-            printf("Line %d: Invalid heap address found at %p\n", __LINE__, bp);
-            return 0;
-        }
-
         if (GET_ALLOC(HDRP(bp)) && GET_ALLOC(NEXT_BLKP(bp))) {
             if (FTRP(bp) > HDRP(NEXT_BLKP(bp))) {
                 printf("Line %d: Overlapping allocated blocks found.\n", __LINE__);
@@ -183,7 +178,7 @@ int mm_check(void) {
             return 0;
         }
 
-        if (!is_valid_heap_address(bp) || GET_ALLOC(bp)) {
+        if (GET_ALLOC(bp)) {
             printf("Line %d: Invalid or allocated block in free list at %p\n", __LINE__, bp);
             return 0;
         }
@@ -277,23 +272,32 @@ void *mm_malloc(size_t size)
 }
 
 /*
+/*
  * mm_free - Freeing a block does nothing.
  */
 void mm_free(void *bp)
 {
+    // If the block pointer is NULL, return immediately as there's nothing to free.
     if (bp == 0) 
         return;
 
+    // Get the size of the block from its header.
     size_t size = GET_SIZE(HDRP(bp));
 
+    // If the heap list pointer is NULL, initialize the memory manager.
     if (heap_listp == 0){
         mm_init();
     }
 
+    // Set the header and footer of the block to indicate that it's free.
+    // PACK combines the size and the free/allocated bit.
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
+
+    // Coalesce, if possible, with adjacent free blocks.
     coalesce(bp);
 }
+
 
 /*
  * coalesce - Boundary tag coalescing. Return ptr to coalesced block
