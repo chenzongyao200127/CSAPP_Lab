@@ -150,8 +150,8 @@ PS: 块大小包括所有的有效载荷（payload）、任何必要的填充（
 - **使用边界标记的合并**：边界标记是一种内存管理技术，它在每个内存块的开始和结束处存储信息，如块的大小和分配状态。当一个块被释放时，分配器可以检查相邻的块，如果它们也是空闲的，则可以迅速将它们合并成一个更大的块。这种合并操作同样是常数时间内完成的，因为它仅涉及对几个边界标记的更新，而不需要遍历整个堆或链表。
 
 一些必须的操作：
-1. 操作空闲链表的基本常数和宏
-2. 创建初始空闲链表
+`1. 操作空闲链表的基本常数和宏`
+`2. 创建初始空闲链表`
 3. 分配块
 4. 双字对齐
 5. 堆扩展
@@ -160,6 +160,7 @@ PS: 块大小包括所有的有效载荷（payload）、任何必要的填充（
 8. 放置块
 9. 合并空闲块
 10. `heap checker`
+11. `realloc()`
 
 
 # `__LINE__` Macro Usage
@@ -213,3 +214,9 @@ if (error_condition) {
 - The `__LINE__` macro is replaced by the line number during preprocessing. It cannot be used to determine the line number dynamically at runtime.
 - It's a part of the source code, so if your code gets moved around or line numbers change due to code modification, `__LINE__` will always represent the current line number in the source file.
 - Overusing `__LINE__` (and other debug macros like `__FILE__`) can make the code harder to read and maintain, so it's best used judiciously, particularly in parts of code where tracking location is crucial (like error handling or logging).
+
+
+# `size_t` Usage
+`size_t` 是一种在 C 和 C++ 程序设计语言中广泛使用的数据类型。它是一个无符号的整型，通常用于表示大小或索引，比如数组的长度、字符串的长度或者用于循环计数器。`size_t` 的确切大小取决于程序运行的平台（操作系统和处理器架构），但它设计得足够大，可以容纳任何数组的大小。
+
+在大多数现代平台上，`size_t` 通常与最常见的指针大小相同。例如，在 32 位系统上，`size_t` 通常是一个 32 位无符号整数，而在 64 位系统上，它通常是一个 64 位无符号整数。这样做的目的是确保 `size_t` 能够表示系统上任何可能的内存大小。使用 `size_t` 作为数组索引和大小的类型有助于提高代码的可移植性和安全性。

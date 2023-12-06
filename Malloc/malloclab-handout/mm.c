@@ -77,18 +77,23 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+/* Debug option */
+#define VERBOSE 1;
+
+
 /* Global variables */
 static char *heap_listp = 0;        /* Pointer to first block */  
 static char *dummy_blockp = 0;      /* Pointer to first dummy free block */
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
-int mm_check(void);
+void mm_check(int verbose);
 static void add_to_free_list(char *bp);
 static int is_in_free_list(char *bp);
 static void remove_from_free_list(char* bp);
 static void *coalesce(char *bp);
-
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t asize);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -125,6 +130,8 @@ int mm_init(void)
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
 
+    mm_check(1);    
+
     /* If everything is successful, return 0 indicating successful initialization. */
     return 0;
 }
@@ -153,125 +160,88 @@ static void *extend_heap(size_t words) {
     return coalesce(bp);
 }
 
-/*
-* mm_check - debug tool
-*/
-int mm_check(void) {
-    char *bp = heap_listp;
-
-    /* Check all blocks in the heap */
-    while (GET_SIZE(HDRP(bp)) != 0) {
-        if (GET_ALLOC(HDRP(bp)) && GET_ALLOC(NEXT_BLKP(bp))) {
-            if (FTRP(bp) > HDRP(NEXT_BLKP(bp))) {
-                printf("Line %d: Overlapping allocated blocks found.\n", __LINE__);
-                return 0;
-            }
-        }
-
-        bp = NEXT_BLKP(bp);
-    }
-
-    /* Check all blocks in the free list */
-    for (bp = GET_SUCC(dummy_blockp); bp != NULL; bp = GET_SUCC(bp)) {
-        if (GET_ALLOC(bp)) {
-            printf("Line %d: Allocated block found in free list at %p\n", __LINE__, bp);
-            return 0;
-        }
-
-        if (GET_ALLOC(bp)) {
-            printf("Line %d: Invalid or allocated block in free list at %p\n", __LINE__, bp);
-            return 0;
-        }
-
-        if (!GET_ALLOC(bp) && !GET_ALLOC(PREV_BLKP(bp))) {
-            printf("Line %d: Contiguous free blocks that escaped coalescing found.\n", __LINE__);
-            return 0;
-        }
-    }
-
-    /* Check if every free block is actually in the free list */
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(bp) && !is_in_free_list(bp)) {
-            printf("Line %d: Free block not in free list found at %p\n", __LINE__, bp);
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-
-
-/* 
- * add_to_free_list - give a free block pointer bp, add this block to the LIFO queue
- */
-static void add_to_free_list(char *bp) {
-    /* Set the successor of the new block to be the current successor of the dummy block */
-    SET_SUCC(bp, GET_SUCC(dummy_blockp));
-
-    /* Set the predecessor of the new block to be the dummy block */
-    SET_PRED(bp, dummy_blockp);
-
-    /* If the dummy block's successor is not NULL, update its predecessor to the new block */
-    if (GET_SUCC(dummy_blockp) != NULL) {
-        SET_PRED(GET_SUCC(dummy_blockp), bp);
-    }
-
-    /* Update the dummy block's successor to the new block */
-    SET_SUCC(dummy_blockp, bp);
-}
-
-/* 
- * is_in_free_list - give a free block pointer bp, check whether it is in the free list
- */
-static int is_in_free_list(char *bp) {
-    char *current_bp = GET_SUCC(dummy_blockp); // Start from the first block in the free list
-
-    // Traverse the free list
-    while (current_bp != NULL) {
-        if (current_bp == bp) {
-            return 1; // Found the block in the free list
-        }
-        current_bp = GET_SUCC(current_bp); // Move to the next block in the free list
-    }
-
-    return 0; // Block not found in the free list
-}
-
-/*
- * remove_from_free_list - given a free block pointer bp, remove it from the free block list
- */
-static void remove_from_free_list(char* bp) {
-    // get predecessor block pointer
-    char* pred_bp = GET_PRED(bp);
-
-    // get successor block pointer
-    char* succ_bp = GET_SUCC(bp);
-
-    // update the successor of the predecessor block
-    SET_SUCC(pred_bp, succ_bp);
-
-    // update the predecessor of the successor block
-    SET_PRED(succ_bp, pred_bp);
-}
 
 /* 
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
-void *mm_malloc(size_t size)
-{
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+void *mm_malloc(size_t size) {
+    size_t asize;      // Adjusted block size
+    size_t extendsize; // Amount to extend heap if no fit
+    char *bp;          // Pointer to the block
+
+    // Initialize the memory allocator if it hasn't been initialized yet
+    if (heap_listp == 0) {
+        mm_init();
     }
+
+    // Ignore spurious requests
+    if (size == 0) {
+        return NULL;
+    }
+
+    // Adjust block size to include overhead and alignment requirements
+    if (size <= DSIZE) {
+        asize = 2 * DSIZE; // Minimum block size
+    } else {
+        // Adjust size to be aligned and include overhead
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
+    }
+
+    // Search the free list for a fit
+    if ((bp = find_fit(asize)) != NULL) {
+        place(bp, asize); // Place the block if a fit is found
+        return bp;
+    }
+
+    // No fit found. Get more memory and place the block
+    extendsize = MAX(asize, CHUNKSIZE); // Calculate the size to extend the heap
+    if ((bp = extend_heap(extendsize / WSIZE)) == NULL) {
+        return NULL; // Return NULL if unable to extend heap
+    }
+    place(bp, asize); // Place the block in the new heap space
+    return bp;
 }
 
 /*
+ * find_fit - First fit search of the free list to find a block that fits
+ */
+static void *find_fit(size_t asize) {
+    void *bp;
+
+    // Start the search from the block following the dummy block in the free list
+    for (bp = GET_SUCC(dummy_blockp); bp != NULL; bp = GET_SUCC(bp)) {
+        if (asize <= GET_SIZE(HDRP(bp))) {
+            return bp; // Found a block that is large enough
+        }
+    }
+
+    return NULL; // No suitable block found
+}
+
+
+/* 
+ * place - Place block of asize bytes at start of free block bp 
+ *         and split if remainder would be at least minimum block size
+ */
+static void place(void *bp, size_t asize) {
+    size_t csize = GET_SIZE(HDRP(bp));   // Get the current block size from the header
+
+    if ((csize - asize) >= (2*DSIZE)) { // Check if the remaining space after allocation is enough for a new block
+        PUT(HDRP(bp), PACK(asize, 1));  // Set the header for the new block of size asize
+        PUT(FTRP(bp), PACK(asize, 1));  // Set the footer for the new block of size asize
+        bp = NEXT_BLKP(bp);             // Move the block pointer to the next block
+        PUT(HDRP(bp), PACK(csize-asize, 0)); // Set the header for the remainder block
+        PUT(FTRP(bp), PACK(csize-asize, 0)); // Set the footer for the remainder block
+    }
+    else { 
+        PUT(HDRP(bp), PACK(csize, 1));  // If splitting is not possible, update the current block as allocated
+        PUT(FTRP(bp), PACK(csize, 1));  // Set both header and footer to mark the entire block as allocated
+    }
+}
+
+
+
 /*
  * mm_free - Freeing a block does nothing.
  */
@@ -348,19 +318,215 @@ static void *coalesce(char *bp) {
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-void *mm_realloc(void *ptr, size_t size)
-{
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
-    
-    newptr = mm_malloc(size);
+void *mm_realloc(void *ptr, size_t size) {
+    void *oldptr = ptr; // Store the old pointer
+    void *newptr;       // Declare a pointer for the newly allocated memory
+    size_t copySize;    // Variable to hold the size of the memory to be copied
+
+    newptr = mm_malloc(size); // Allocate new memory of the specified size
     if (newptr == NULL)
-      return NULL;
+      return NULL; // If memory allocation fails, return NULL
+
+    // Calculate the size of the memory block pointed by oldptr
     copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
     if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+      copySize = size; // Adjust copySize to be the minimum of requested size and original block size
+
+    memcpy(newptr, oldptr, copySize); // Copy the data from the old memory block to the new one
+    mm_free(oldptr); // Free the old memory block
+
+    return newptr; // Return the pointer to the new memory block
+}
+
+
+/*
+ * printblock - Prints the details of a block pointed to by bp.
+ */
+static void printblock(void *bp) 
+{
+    size_t hsize, halloc, fsize, falloc; // Declare variables for size and allocation status.
+
+    checkheap(0); // Check the heap for consistency without verbose output.
+
+    // Retrieve size and allocation status from both the header and footer of the block.
+    hsize = GET_SIZE(HDRP(bp));
+    halloc = GET_ALLOC(HDRP(bp));  
+    fsize = GET_SIZE(FTRP(bp));
+    falloc = GET_ALLOC(FTRP(bp));  
+
+    // If the block size is zero, it's the end of the list. Print EOL and return.
+    if (hsize == 0) {
+        printf("%p: EOL\n", bp);
+        return;
+    }
+
+    // Print the block pointer and details about the block's header and footer.
+    printf("%p: header: [%ld:%c] footer: [%ld:%c]\n", bp, 
+           hsize, (halloc ? 'a' : 'f'), 
+           fsize, (falloc ? 'a' : 'f')); 
+}
+
+/*
+ * checkblock - Checks a block for consistency.
+ */
+static void checkblock(void *bp) 
+{
+    // Check if the block pointer is doubleword aligned (8-byte aligned).
+    if ((size_t)bp % 8)
+        printf("Error: %p is not doubleword aligned\n", bp);
+
+    // Check if the header and footer of the block match.
+    if (GET(HDRP(bp)) != GET(FTRP(bp)))
+        printf("Error: header does not match footer\n");
+}
+
+
+/*
+ * check_freelist() - Checks heap Free list
+ */
+static void check_freelist() {
+    char *bp = heap_listp; // Set bp (block pointer) to start of the heap.
+
+    // Loop through all blocks in the free list
+    for (bp = GET_SUCC(dummy_blockp); bp != NULL; bp = GET_SUCC(bp)) {
+        // Check if the current block is allocated, which should not be the case for blocks in the free list
+        if (GET_ALLOC(bp)) {
+            printf("Line %d: Allocated block found in free list at %p\n", __LINE__, bp);
+            return 0;
+        }
+
+        // This condition appears to be a duplicate of the previous one and might be an error
+        if (GET_ALLOC(bp)) {
+            printf("Line %d: Invalid or allocated block in free list at %p\n", __LINE__, bp);
+            return 0;
+        }
+
+        // Check if there are contiguous free blocks that should have been coalesced
+        if (!GET_ALLOC(bp) && !GET_ALLOC(PREV_BLKP(bp))) {
+            printf("Line %d: Contiguous free blocks that escaped coalescing found.\n", __LINE__);
+            return 0;
+        }
+    }
+
+    // Check if every free block is actually in the free list
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(bp) && !is_in_free_list(bp)) {
+            printf("Line %d: Free block not in free list found at %p\n", __LINE__, bp);
+            return 0;
+        }
+    }
+}
+
+
+/* 
+ * checkheap - Performs a minimal check of the heap for consistency.
+ */
+void checkheap(int verbose) 
+{
+    char *bp = heap_listp; // Set bp (block pointer) to start of the heap.
+
+    // If verbose mode is enabled, print the heap starting address.
+    if (verbose)
+        printf("Heap (%p):\n", heap_listp);
+
+    // Check if the size of the prologue block is correct and if it is allocated.
+    // The prologue block should have a size of DSIZE and be allocated.
+    if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
+        printf("Bad prologue header\n");
+    checkblock(heap_listp); // Check the prologue block for consistency.
+
+    // Iterate through the blocks in the heap.
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        // If verbose mode is enabled, print details of the current block.
+        if (verbose) 
+            printblock(bp);
+        checkblock(bp); // Check the current block for consistency.
+
+        if (GET_ALLOC(HDRP(bp)) && GET_ALLOC(NEXT_BLKP(bp))) {
+            if (FTRP(bp) > HDRP(NEXT_BLKP(bp))) {
+                printf("Line %d: Overlapping allocated blocks found.\n", __LINE__);
+                return 0;
+            }
+        }
+    }
+
+    // If verbose mode is enabled, print the epilogue block.
+    if (verbose)
+        printblock(bp);
+
+    // Check if the size of the epilogue block is zero and if it is allocated.
+    // The epilogue block should have a size of 0 and be allocated.
+    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
+        printf("Bad epilogue header\n");
+
+    // check free list
+    check_freelist();
+}
+
+
+/*
+* mm_check - debug tool
+*/
+void mm_check(int verbose) {
+    checkheap(verbose);
+
+    printf("[*] Line %d: Pass :) \n", __LINE__);
+    return 1;
+}
+
+
+/* 
+ * add_to_free_list - give a free block pointer bp, add this block to the LIFO queue
+ */
+static void add_to_free_list(char *bp) {
+    /* Set the successor of the new block to be the current successor of the dummy block */
+    SET_SUCC(bp, GET_SUCC(dummy_blockp));
+
+    /* Set the predecessor of the new block to be the dummy block */
+    SET_PRED(bp, dummy_blockp);
+
+    /* If the dummy block's successor is not NULL, update its predecessor to the new block */
+    if (GET_SUCC(dummy_blockp) != NULL) {
+        SET_PRED(GET_SUCC(dummy_blockp), bp);
+    }
+
+    /* Update the dummy block's successor to the new block */
+    SET_SUCC(dummy_blockp, bp);
+}
+
+/* 
+ * is_in_free_list - give a free block pointer bp, check whether it is in the free list
+ */
+static int is_in_free_list(char *bp) {
+    char *current_bp = GET_SUCC(dummy_blockp); // Start from the first block in the free list
+
+    // Traverse the free list
+    while (current_bp != NULL) {
+        if (current_bp == bp) {
+            return 1; // Found the block in the free list
+        }
+        current_bp = GET_SUCC(current_bp); // Move to the next block in the free list
+    }
+
+    return 0; // Block not found in the free list
+}
+
+/*
+ * remove_from_free_list - given a free block pointer bp, remove it from the free block list
+ */
+static void remove_from_free_list(char *bp) {
+    char *prev_bp = GET_PRED(bp);
+    char *next_bp = GET_SUCC(bp);
+
+    /* If bp is the first block in the free list (after the dummy block) */
+    if (prev_bp == dummy_blockp) {
+        SET_SUCC(dummy_blockp, next_bp);
+    } else {
+        SET_SUCC(prev_bp, next_bp);
+    }
+
+    /* If bp is not the last block in the free list */
+    if (next_bp != NULL) {
+        SET_PRED(next_bp, prev_bp);
+    }
 }
