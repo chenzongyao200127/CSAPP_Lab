@@ -118,10 +118,10 @@ int mm_init(void) {
     /* Initialize the dummy block. */
     dummy_blockp = heap_listp + (4 * WSIZE); // set global dummy pointer
 
-    PUT(heap_listp + (3 * WSIZE), PACK(DSIZE, 1)); // Dummy block header
+    PUT(heap_listp + (3 * WSIZE), PACK(2 * DSIZE, 1)); // Dummy block header
     PUT(heap_listp + (4 * WSIZE), dummy_blockp); // Dummy block predecessor pointer -> self
     PUT(heap_listp + (5 * WSIZE), dummy_blockp); // Dummy block successor pointer   -> self
-    PUT(heap_listp + (6 * WSIZE), PACK(DSIZE, 1)); // Dummy block footer
+    PUT(heap_listp + (6 * WSIZE), PACK(2 * DSIZE, 1)); // Dummy block footer
 
     /* Set up the epilogue header, which is now two blocks further. */
     PUT(heap_listp + (7 * WSIZE), PACK(0, 1));     
@@ -152,11 +152,12 @@ static void *extend_heap(size_t words) {
         return NULL;
 
     /* After extending the heap, check if dummy block needs to be updated */
-    if (old_dummy_succ != dummy_blockp) {
+    if (GET_SUCC(dummy_blockp) != dummy_blockp) {
         // If the old successor of dummy block was not itself, update its pointers
-        SET_PRED(old_dummy_succ, dummy_blockp);
         SET_SUCC(dummy_blockp, old_dummy_succ);
     }
+
+    bp += DSIZE;
 
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */

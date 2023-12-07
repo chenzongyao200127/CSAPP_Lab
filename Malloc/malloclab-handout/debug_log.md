@@ -24,3 +24,36 @@ $2 = 0x1000
 gef➤  
 ~~~
 dummy node 后继节点地址 在extend_heap后被修改
+
+
+
+
+~~~shell
+    391      // Check if the header and footer of the block match.
+ →  392      if (GET(HDRP(bp)) != GET(FTRP(bp)))
+    393          printf("Line %d Error: header does not match footer\n", __LINE__);
+    394  }
+    395  
+    396  
+    397  /*
+────────────────────────────────────────────────────────────────────────── threads ────
+[#0] Id 1, Name: "mdriver", stopped 0x56557d2f in checkblock (), reason: SIGSEGV
+──────────────────────────────────────────────────────────────────────────── trace ────
+[#0] 0x56557d2f → checkblock(bp=0xf69c4028)
+[#1] 0x56557e62 → checkheap(verbose=0x0)
+[#2] 0x5655810e → mm_check(verbose=0x0)
+[#3] 0x5655810e → mm_malloc(size=0x7f8)
+[#4] 0x56556cb0 → eval_mm_valid(ranges=0xffffcd50, tracenum=<optimized out>, trace=0x5655e600)
+[#5] 0x56556cb0 → main(argc=<optimized out>, argv=<optimized out>)
+───────────────────────────────────────────────────────────────────────────────────────
+gef➤  p *(int *)0xf69c4030
+$15 = 0xf69c4020
+gef➤  p *(int *)0xf69c4034
+$16 = 0xf69c4020
+gef➤  p *(int *)0xf69c5028
+$17 = 0x1000
+gef➤  p bp
+$18 = (void *) 0xf69c4028
+gef➤  
+~~~
+`bp` 的位置有问题

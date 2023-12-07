@@ -125,7 +125,7 @@ This implementation assumes a certain structure for your heap and free blocks. Y
 # My Block Struct
 ~~~shell
             31 ......  3  2 1 0
-            [   块大小  ][ 0 0 a] (a = 1: 已分配的， a = 0: 空闲的) 块大小包括所有的有效载荷和填充
+            [   块大小  ][ 0 0 a] (a = 1: 已分配的， a = 0: 空闲的)
    malloc ->[     pred         ](祖先)    ---+
             [     succ         ](后继)       |
             [      有效载荷     ]             原来的有效载荷
