@@ -80,6 +80,10 @@ team_t team = {
 /* Debug option */
 #define VERBOSE 0
 
+/* Turn off heap checker */
+#define check(verbose, lineo) mm_check(verbose, lineo)
+// #define check(verbose)
+
 
 /* Global variables */
 static char *heap_listp = 0;        /* Pointer to first block */  
@@ -87,7 +91,7 @@ static char *dummy_blockp = 0;      /* Pointer to first dummy free block */
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
-void mm_check(int verbose);
+void mm_check(int verbose, int lineno);
 
 // free list manipulate
 static void add_to_free_list(char *bp);
@@ -126,8 +130,8 @@ int mm_init(void) {
     /* Set up the epilogue header, which is now two blocks further. */
     PUT(heap_listp + (7 * WSIZE), PACK(0, 1));     
 
-    /* Move heap list pointer past the prologue and dummy block for future allocations. */
-    heap_listp += (6 * WSIZE);
+    /* Move heap list pointer to the prologue */
+    heap_listp += (2 * WSIZE);
 
     /* Extend the heap with a free block of size CHUNKSIZE. */
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
@@ -190,7 +194,7 @@ void *mm_malloc(size_t size) {
         return NULL;
     }
 
-    mm_check(VERBOSE); 
+    check(VERBOSE, __LINE__); 
 
     // Adjust block size to include overhead and alignment requirements
     if (size <= DSIZE) {
@@ -213,8 +217,8 @@ void *mm_malloc(size_t size) {
     }
     place(bp, asize); // Place the block in the new heap space
     
-    printf("[*] malloc ok");
-    mm_check(VERBOSE); 
+    printf("[*] malloc ok\n");
+    check(VERBOSE, __LINE__); 
     
     return bp;
 }
@@ -246,14 +250,21 @@ static void place(void *bp, size_t asize) {
     if ((csize - asize) >= (2*DSIZE)) { // Check if the remaining space after allocation is enough for a new block
         PUT(HDRP(bp), PACK(asize, 1));  // Set the header for the new block of size asize
         PUT(FTRP(bp), PACK(asize, 1));  // Set the footer for the new block of size asize
+        remove_from_free_list(bp);      
+
         bp = NEXT_BLKP(bp);             // Move the block pointer to the next block
         PUT(HDRP(bp), PACK(csize-asize, 0)); // Set the header for the remainder block
         PUT(FTRP(bp), PACK(csize-asize, 0)); // Set the footer for the remainder block
+        coalesce(bp);
     }
+
     else { 
         PUT(HDRP(bp), PACK(csize, 1));  // If splitting is not possible, update the current block as allocated
         PUT(FTRP(bp), PACK(csize, 1));  // Set both header and footer to mark the entire block as allocated
+        remove_from_free_list(bp);
     }
+
+    check(VERBOSE, __LINE__); 
 }
 
 
@@ -283,7 +294,7 @@ void mm_free(void *bp)
     // Coalesce, if possible, with adjacent free blocks.
     coalesce(bp);
 
-    mm_check(VERBOSE); 
+    check(VERBOSE, __LINE__); 
 }
 
 
@@ -329,6 +340,8 @@ static void *coalesce(char *bp) {
     }
 
     add_to_free_list(bp);
+
+    check(VERBOSE, __LINE__); 
     return bp;
 }
 
@@ -336,34 +349,48 @@ static void *coalesce(char *bp) {
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-void *mm_realloc(void *ptr, size_t size) {
-    void *oldptr = ptr; // Store the old pointer
-    void *newptr;       // Declare a pointer for the newly allocated memory
-    size_t copySize;    // Variable to hold the size of the memory to be copied
+void *mm_realloc(void *ptr, size_t size)
+{
+    size_t oldsize;
+    void *newptr;
 
-    newptr = mm_malloc(size); // Allocate new memory of the specified size
-    if (newptr == NULL)
-      return NULL; // If memory allocation fails, return NULL
+    /* If size == 0 then this is just free, and we return NULL. */
+    if(size == 0) {
+        mm_free(ptr);
+        return 0;
+    }
 
-    // Calculate the size of the memory block pointed by oldptr
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size; // Adjust copySize to be the minimum of requested size and original block size
+    /* If oldptr is NULL, then this is just malloc. */
+    if(ptr == NULL) {
+        return mm_malloc(size);
+    }
 
-    memcpy(newptr, oldptr, copySize); // Copy the data from the old memory block to the new one
-    mm_free(oldptr); // Free the old memory block
+    newptr = mm_malloc(size);
 
-    return newptr; // Return the pointer to the new memory block
+    /* If realloc() fails the original block is left untouched  */
+    if(!newptr) {
+        return 0;
+    }
+
+    /* Copy the old data. */
+    oldsize = GET_SIZE(HDRP(ptr));
+    if(size < oldsize) oldsize = size;
+    memcpy(newptr, ptr, oldsize);
+
+    /* Free the old block. */
+    mm_free(ptr);
+
+    return newptr;
 }
 
 
 /*
  * printblock - Prints the details of a block pointed to by bp.
  */
-static void printblock(void *bp) {
+static void printblock(void *bp, int lineno) {
     size_t hsize, halloc; // Declare variables for size and allocation status.
 
-    checkheap(VERBOSE); // Check the heap for consistency with verbose output.
+    checkheap(VERBOSE, lineno); // Check the heap for consistency with verbose output.
 
     // Retrieve size and allocation status from the block's header.
     hsize = GET_SIZE(HDRP(bp));
@@ -371,7 +398,7 @@ static void printblock(void *bp) {
 
     // If the block size is zero, it's the end of the list. Print EOL and return.
     if (hsize == 0) {
-        printf("Line %d - %p: EOL\n", __LINE__, bp);
+        printf("Line %d - %p: EOL\n", lineno, bp);
         return;
     }
 
@@ -382,35 +409,35 @@ static void printblock(void *bp) {
 /*
  * checkblock - Checks a block for consistency.
  */
-static void checkblock(void *bp) 
+static void checkblock(void *bp, int lineno) 
 {
     // Check if the block pointer is doubleword aligned (8-byte aligned).
     if ((size_t)bp % 8)
-        printf("Line %d Error: %p is not doubleword aligned\n", __LINE__, bp);
+        printf("Line %d Error: %p is not doubleword aligned\n", lineno, bp);
 
     // Check if the header and footer of the block match.
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
-        printf("Line %d Error: header does not match footer\n", __LINE__);
+        printf("Line %d Error: header does not match footer\n", lineno);
 }
 
 
 /*
  * check_freelist() - Checks heap Free list
  */
-static int check_freelist() {
+static int check_freelist(int lineno) {
     char *bp;
 
     // Loop through all blocks in the free list
     for (bp = GET_SUCC(dummy_blockp); bp != dummy_blockp; bp = GET_SUCC(bp)) {
         // Check if the current block is allocated, which should not be the case for blocks in the free list
         if (GET_ALLOC(HDRP(bp))) {
-            printf("Line %d: Allocated block found in free list at %p\n", __LINE__, bp);
+            printf("Line %d: Allocated block found in free list at %p\n", lineno, bp);
             return 0;
         }
 
         // Check if there are contiguous free blocks that should have been coalesced
         if (!GET_ALLOC(HDRP(bp)) && !GET_ALLOC(HDRP(PREV_BLKP(bp)))) {
-            printf("Line %d: Contiguous free blocks that escaped coalescing found.\n", __LINE__);
+            printf("Line %d: Contiguous free blocks that escaped coalescing found.\n", lineno);
             return 0;
         }
     }
@@ -418,7 +445,7 @@ static int check_freelist() {
     // Check if every free block is actually in the free list
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && !is_in_free_list(bp)) {
-            printf("Line %d: Free block not in free list found at %p\n", __LINE__, bp);
+            printf("Line %d: Free block not in free list found at %p\n", lineno, bp);
             return 0;
         }
     }
@@ -431,7 +458,7 @@ static int check_freelist() {
 /* 
  * checkheap - Performs a minimal check of the heap for consistency.
  */
-void checkheap(int verbose) 
+void checkheap(int verbose, int lineno) 
 {
     char *bp = heap_listp; // Set bp (block pointer) to start of the heap.
 
@@ -443,18 +470,18 @@ void checkheap(int verbose)
     // The prologue block should have a size of DSIZE and be allocated.
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
         printf("Bad prologue header\n");
-    checkblock(heap_listp); // Check the prologue block for consistency.
+    checkblock(heap_listp, lineno); // Check the prologue block for consistency.
 
     // Iterate through the blocks in the heap.
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         // If verbose mode is enabled, print details of the current block.
         if (verbose) 
-            printblock(bp);
-        checkblock(bp); // Check the current block for consistency.
+            printblock(bp, lineno);
+        checkblock(bp, lineno); // Check the current block for consistency.
 
         if (GET_ALLOC(HDRP(bp)) && GET_ALLOC(NEXT_BLKP(bp))) {
             if (FTRP(bp) > HDRP(NEXT_BLKP(bp))) {
-                printf("Line %d: Overlapping allocated blocks found.\n", __LINE__);
+                printf("Line %d: Overlapping allocated blocks found.\n", lineno);
                 return 0;
             }
         }
@@ -462,25 +489,25 @@ void checkheap(int verbose)
 
     // If verbose mode is enabled, print the epilogue block.
     if (verbose)
-        printblock(bp);
+        printblock(bp, lineno);
 
     // Check if the size of the epilogue block is zero and if it is allocated.
     // The epilogue block should have a size of 0 and be allocated.
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
-        printf("Bad epilogue header\n");
+        printf("Line %d: Bad epilogue header.\n", lineno);
 
     // check free list
-    assert(1 == check_freelist());
+    assert(check_freelist(lineno));
 }
 
 
 /*
 * mm_check - debug tool
 */
-void mm_check(int verbose) {
-    checkheap(verbose);
+void mm_check(int verbose, int lineno) {
+    checkheap(verbose, lineno);
 
-    printf("[*] Line %d: Pass :) \n", __LINE__);
+    printf("[*] MM CHECK: Pass :) \n");
     return 1;
 }
 
@@ -502,6 +529,8 @@ static void add_to_free_list(char *bp) {
 
     // Update the dummy block's successor to the new block
     SET_SUCC(dummy_blockp, bp);
+
+    check(VERBOSE, __LINE__); 
 }
 
 
@@ -534,4 +563,6 @@ static void remove_from_free_list(char *bp) {
 
     SET_SUCC(prev_bp, next_bp);
     SET_PRED(next_bp, prev_bp);
+
+    check(VERBOSE, __LINE__); 
 }

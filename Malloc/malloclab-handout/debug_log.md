@@ -57,3 +57,13 @@ $18 = (void *) 0xf69c4028
 gef➤  
 ~~~
 `bp` 的位置有问题
+
+
+
+~~~c
+m_init()
+mm_malloc(size=0x7f8)
+mm_malloc(size=0x7f8)
+mm_free(bp=0xf69c3830)
+mm_malloc(size=0x30)
+mm_malloc(size=0xfe8)
