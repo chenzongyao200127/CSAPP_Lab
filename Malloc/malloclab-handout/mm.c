@@ -577,20 +577,29 @@ static void remove_from_free_list(char *bp) {
     check(VERBOSE, __LINE__); 
 }
 
+// Define a function to print the memory contents at a given pointer.
 void printMemoryContent(void *ptr) {
+    // Convert the void pointer to an unsigned char pointer for byte-wise access.
     unsigned char *bytePtr = (unsigned char *)ptr;
 
+    // Print the address of the memory location being accessed.
     printf("Memory content at [%p]:\n", ptr);
+
+    // Iterate over a fixed number of bytes (WSIZE * 10).
     for (int i = 0; i < WSIZE * 10; i++) {
-        // 在每个字的开始处添加空格
+        // Add a space after every WSIZE bytes for readability.
         if (i > 0 && i % WSIZE == 0) {
             printf(" ");
         }
 
-        // 计算当前字节在大端序中的位置
+        // Calculate the index for big-endian byte order.
+        // This reorders the byte sequence for each WSIZE block.
         int bigEndianIndex = (i / WSIZE) * WSIZE + WSIZE - 1 - (i % WSIZE);
         
+        // Print the byte at the calculated index in hexadecimal format.
         printf("%02x", bytePtr[bigEndianIndex]);
     }
+
+    // Print a newline at the end for better output formatting.
     printf("\n");
 }
