@@ -61,7 +61,7 @@ gef➤
 
 
 ~~~c
-m_init()
+mm_init()
 mm_malloc(size=0x7f8)
 mm_malloc(size=0x7f8)
 mm_free(bp=0xf69c3830)

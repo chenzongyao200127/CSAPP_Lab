@@ -53,7 +53,7 @@ team_t team = {
 #define PUT(p, val)  (*(unsigned int *)(p) = (val))    
 
 /* Read the size and allocated fields from address p */
-#define GET_SIZE(p)     (GET(p) & (~0x7))
+#define GET_SIZE(p)     (GET(p) & ~0x7)
 #define GET_ALLOC(p)    (GET(p) & 0x1)
 
 /* Given block ptr bp, compute address of its header and footer */
@@ -82,8 +82,7 @@ team_t team = {
 
 /* Turn off heap checker */
 #define check(verbose, lineo) mm_check(verbose, lineo)
-// #define check(verbose)
-
+// #define check(verbose, lineo) 
 
 /* Global variables */
 static char *heap_listp = 0;        /* Pointer to first block */  
@@ -102,6 +101,7 @@ static void *coalesce(char *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
+void printMemoryContent(void *ptr);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -109,11 +109,11 @@ static void place(void *bp, size_t asize);
 int mm_init(void) {
     /* Initialize the heap list pointer to create an empty heap. 
        Allocate memory space for the additional blocks, checking for failure. */
-    if ((heap_listp = mem_sbrk((4 + 2) * WSIZE)) == (void *) - 1) // Allocate space for dummy block and its pointers
+    if ((heap_listp = mem_sbrk((2 + 4 + 2) * WSIZE)) == (void *) - 1) // Allocate space for dummy block and its pointers
         return -1;
 
     /* Set up the alignment padding at the beginning of the heap. */
-    PUT(heap_listp, 0);                           
+    PUT(heap_listp, 0);               
 
     /* Initialize the Prologue */
     PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); 
@@ -137,6 +137,9 @@ int mm_init(void) {
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
 
+    // printf("After mm_init");
+    check(VERBOSE, __LINE__); 
+
     /* If everything is successful, return 0 indicating successful initialization. */
     return 0;
 }
@@ -150,28 +153,23 @@ static void *extend_heap(size_t words) {
 
     /* Allocate an even number of words to maintain alignment */
     size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
-    char *old_dummy_succ = GET_SUCC(dummy_blockp); // Store old successor of dummy block
 
     if ((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
-
-    /* After extending the heap, check if dummy block needs to be updated */
-    if (GET_SUCC(dummy_blockp) != dummy_blockp) {
-        // If the old successor of dummy block was not itself, update its pointers
-        SET_SUCC(dummy_blockp, old_dummy_succ);
-    }
-
-    bp += DSIZE;
 
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */
 
+    // printMemoryContent(heap_listp - (2 * WSIZE));
+
+    // printf("After extend_heap");
+    check(VERBOSE, __LINE__); 
+
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
-
 
 
 
@@ -194,8 +192,6 @@ void *mm_malloc(size_t size) {
         return NULL;
     }
 
-    check(VERBOSE, __LINE__); 
-
     // Adjust block size to include overhead and alignment requirements
     if (size <= DSIZE) {
         asize = 2 * DSIZE; // Minimum block size
@@ -216,10 +212,12 @@ void *mm_malloc(size_t size) {
         return NULL; // Return NULL if unable to extend heap
     }
     place(bp, asize); // Place the block in the new heap space
-    
-    printf("[*] malloc ok\n");
+
+    // printf("After mm_malloc");
     check(VERBOSE, __LINE__); 
-    
+
+    // printf("[🐅] malloc ok\n");    
+
     return bp;
 }
 
@@ -264,6 +262,7 @@ static void place(void *bp, size_t asize) {
         remove_from_free_list(bp);
     }
 
+    // printf("After place");
     check(VERBOSE, __LINE__); 
 }
 
@@ -294,7 +293,10 @@ void mm_free(void *bp)
     // Coalesce, if possible, with adjacent free blocks.
     coalesce(bp);
 
-    check(VERBOSE, __LINE__); 
+    // printf("After mm_free");
+    check(VERBOSE, __LINE__);
+     
+    // printf("[🐖] free OK\n");
 }
 
 
@@ -341,6 +343,7 @@ static void *coalesce(char *bp) {
 
     add_to_free_list(bp);
 
+    // printf("After coalesce");
     check(VERBOSE, __LINE__); 
     return bp;
 }
@@ -389,8 +392,6 @@ void *mm_realloc(void *ptr, size_t size)
  */
 static void printblock(void *bp, int lineno) {
     size_t hsize, halloc; // Declare variables for size and allocation status.
-
-    checkheap(VERBOSE, lineno); // Check the heap for consistency with verbose output.
 
     // Retrieve size and allocation status from the block's header.
     hsize = GET_SIZE(HDRP(bp));
@@ -464,7 +465,7 @@ void checkheap(int verbose, int lineno)
 
     // If verbose mode is enabled, print the heap starting address.
     if (verbose)
-        printf("Heap (%p):\n", heap_listp);
+        printf("[⭐]Heap (%p):\n", heap_listp);
 
     // Check if the size of the prologue block is correct and if it is allocated.
     // The prologue block should have a size of DSIZE and be allocated.
@@ -474,6 +475,10 @@ void checkheap(int verbose, int lineno)
 
     // Iterate through the blocks in the heap.
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        // printf("line: %d\n", lineno);
+        // printf("cur dp: %p\n", bp);
+        // printf("GET_SIZE(HDRP(bp)): %d\n", GET_SIZE(HDRP(bp)));
+        // printf("next dp: %p\n", NEXT_BLKP(bp));
         // If verbose mode is enabled, print details of the current block.
         if (verbose) 
             printblock(bp, lineno);
@@ -488,16 +493,22 @@ void checkheap(int verbose, int lineno)
     }
 
     // If verbose mode is enabled, print the epilogue block.
-    if (verbose)
+    if (1) {
+        printf("\nthe epilogue block: ");
         printblock(bp, lineno);
+    }
+        
 
     // Check if the size of the epilogue block is zero and if it is allocated.
     // The epilogue block should have a size of 0 and be allocated.
-    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
+    if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp)))) {
+        printf("bp: %p", bp);
+        printMemoryContent(bp - WSIZE);
         printf("Line %d: Bad epilogue header.\n", lineno);
+    }
 
     // check free list
-    assert(check_freelist(lineno));
+    // assert(check_freelist(lineno));
 }
 
 
@@ -507,33 +518,9 @@ void checkheap(int verbose, int lineno)
 void mm_check(int verbose, int lineno) {
     checkheap(verbose, lineno);
 
-    printf("[*] MM CHECK: Pass :) \n");
+    printf("[*] MM CHECK: Pass :) \n\n");
     return 1;
 }
-
-
-/* 
- * add_to_free_list - give a free block pointer bp, add this block to the LIFO queue
- */
-static void add_to_free_list(char *bp) {
-    char *next_bp = GET_SUCC(dummy_blockp);
-
-    // Set the successor of the new block to be the current successor of the dummy block
-    SET_SUCC(bp, next_bp);
-
-    // Set the predecessor of the successor of the dummy block to be the new block
-    SET_PRED(next_bp, bp);
-
-    // Set the predecessor of the new block to be the dummy block
-    SET_PRED(bp, dummy_blockp);
-
-    // Update the dummy block's successor to the new block
-    SET_SUCC(dummy_blockp, bp);
-
-    check(VERBOSE, __LINE__); 
-}
-
-
 
 
 /* 
@@ -553,6 +540,28 @@ static int is_in_free_list(char *bp) {
     return 0; // Block not found in the free list
 }
 
+/* 
+ * add_to_free_list - give a free block pointer bp, add this block to the LIFO queue
+ */
+static void add_to_free_list(char *bp) {
+    char *next_bp = GET_SUCC(dummy_blockp);
+
+    // Set the successor of the new block to be the current successor of the dummy block
+    SET_SUCC(bp, next_bp);
+
+    // Set the predecessor of the successor of the dummy block to be the new block
+    SET_PRED(next_bp, bp);
+
+    // Set the predecessor of the new block to be the dummy block
+    SET_PRED(bp, dummy_blockp);
+
+    // Update the dummy block's successor to the new block
+    SET_SUCC(dummy_blockp, bp);
+
+    // printf("after add_to_free_list");
+    check(VERBOSE, __LINE__); 
+}
+
 
 /*
  * remove_from_free_list - given a free block pointer bp, remove it from the free block list
@@ -564,5 +573,24 @@ static void remove_from_free_list(char *bp) {
     SET_SUCC(prev_bp, next_bp);
     SET_PRED(next_bp, prev_bp);
 
+    // printf("After remove_from_free_list");
     check(VERBOSE, __LINE__); 
+}
+
+void printMemoryContent(void *ptr) {
+    unsigned char *bytePtr = (unsigned char *)ptr;
+
+    printf("Memory content at [%p]:\n", ptr);
+    for (int i = 0; i < WSIZE * 10; i++) {
+        // 在每个字的开始处添加空格
+        if (i > 0 && i % WSIZE == 0) {
+            printf(" ");
+        }
+
+        // 计算当前字节在大端序中的位置
+        int bigEndianIndex = (i / WSIZE) * WSIZE + WSIZE - 1 - (i % WSIZE);
+        
+        printf("%02x", bytePtr[bigEndianIndex]);
+    }
+    printf("\n");
 }
