@@ -220,3 +220,46 @@ if (error_condition) {
 `size_t` 是一种在 C 和 C++ 程序设计语言中广泛使用的数据类型。它是一个无符号的整型，通常用于表示大小或索引，比如数组的长度、字符串的长度或者用于循环计数器。`size_t` 的确切大小取决于程序运行的平台（操作系统和处理器架构），但它设计得足够大，可以容纳任何数组的大小。
 
 在大多数现代平台上，`size_t` 通常与最常见的指针大小相同。例如，在 32 位系统上，`size_t` 通常是一个 32 位无符号整数，而在 64 位系统上，它通常是一个 64 位无符号整数。这样做的目的是确保 `size_t` 能够表示系统上任何可能的内存大小。使用 `size_t` 作为数组索引和大小的类型有助于提高代码的可移植性和安全性。
+
+
+# Reference
+1. https://www.keblog.me/2014/11/debug-malloc-lab-csapp/
+
+
+# Result
+
+~~~shell
+# czy @ czy-307-thinkcentre-m720q-n000 in ~/new_space/CSAPP_Lab/Malloc/malloclab-handout on git:master x [21:22:13] 
+$ ./mdriver -f short1-bal.rep -V
+Team Name:SEU
+Member 1 :Chen Zongyao:solar1s@seu.edu.cn
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: short1-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs  Kops
+ 0       yes   66%      12  0.000001 12000
+Total          66%      12  0.000001 12000
+
+Perf index = 40 (util) + 40 (thru) = 80/100
+
+# czy @ czy-307-thinkcentre-m720q-n000 in ~/new_space/CSAPP_Lab/Malloc/malloclab-handout on git:master x [21:22:20] 
+$ ./mdriver -f short2-bal.rep -V
+Team Name:SEU
+Member 1 :Chen Zongyao:solar1s@seu.edu.cn
+Measuring performance with gettimeofday().
+
+Testing mm malloc
+Reading tracefile: short2-bal.rep
+Checking mm_malloc for correctness, efficiency, and performance.
+
+Results for mm malloc:
+trace  valid  util     ops      secs  Kops
+ 0       yes   89%      12  0.000001 12000
+Total          89%      12  0.000001 12000
+
+Perf index = 54 (util) + 40 (thru) = 94/100
+~~~

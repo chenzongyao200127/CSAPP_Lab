@@ -81,8 +81,8 @@ team_t team = {
 #define VERBOSE 0
 
 /* Turn off heap checker */
-#define check(verbose, lineo) mm_check(verbose, lineo)
-// #define check(verbose, lineo) 
+// #define check(verbose, lineo) mm_check(verbose, lineo)
+#define check(verbose, lineo) 
 
 /* Global variables */
 static char *heap_listp = 0;        /* Pointer to first block */  
@@ -165,7 +165,7 @@ static void *extend_heap(size_t words) {
     // printMemoryContent(heap_listp - (2 * WSIZE));
 
     // printf("After extend_heap");
-    check(VERBOSE, __LINE__); 
+    // check(VERBOSE, __LINE__); 
 
     /* Coalesce if the previous block was free */
     return coalesce(bp);
@@ -216,7 +216,7 @@ void *mm_malloc(size_t size) {
     // printf("After mm_malloc");
     check(VERBOSE, __LINE__); 
 
-    // printf("[🐅] malloc ok\n");    
+    // printf("[🐅] malloc ok\n\n");    
 
     return bp;
 }
@@ -263,7 +263,7 @@ static void place(void *bp, size_t asize) {
     }
 
     // printf("After place");
-    check(VERBOSE, __LINE__); 
+    // check(VERBOSE, __LINE__); 
 }
 
 
@@ -296,7 +296,7 @@ void mm_free(void *bp)
     // printf("After mm_free");
     check(VERBOSE, __LINE__);
      
-    // printf("[🐖] free OK\n");
+    // printf("[🐖] free OK\n\n");
 }
 
 
@@ -304,6 +304,10 @@ void mm_free(void *bp)
  * coalesce - Boundary tag coalescing. Return ptr to coalesced block
  */
 static void *coalesce(char *bp) {
+    if (bp == NULL) {
+        return NULL;
+    }
+
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
@@ -327,13 +331,13 @@ static void *coalesce(char *bp) {
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         bp = PREV_BLKP(bp);
         remove_from_free_list(bp);
-        PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(bp), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0));
     }
 
     /* Case 4: Coalesce with both previous and next blocks */
     else {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         remove_from_free_list(PREV_BLKP(bp));
         remove_from_free_list(NEXT_BLKP(bp));
         bp = PREV_BLKP(bp);
@@ -343,10 +347,9 @@ static void *coalesce(char *bp) {
 
     add_to_free_list(bp);
 
-    // printf("After coalesce");
-    check(VERBOSE, __LINE__); 
     return bp;
 }
+
 
 
 /*
@@ -398,8 +401,9 @@ static void printblock(void *bp, int lineno) {
     halloc = GET_ALLOC(HDRP(bp));  
 
     // If the block size is zero, it's the end of the list. Print EOL and return.
-    if (hsize == 0) {
-        printf("Line %d - %p: EOL\n", lineno, bp);
+    if (hsize == 0 && halloc == 1) {
+        // print the epilogue block
+        printf("%p: EOL\n", bp);
         return;
     }
 
@@ -418,7 +422,7 @@ static void checkblock(void *bp, int lineno)
 
     // Check if the header and footer of the block match.
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
-        printf("Line %d Error: header does not match footer\n", lineno);
+        printf("Line %d Error: header does not match footer, curr bp: %p \n", lineno, bp);
 }
 
 
@@ -465,7 +469,7 @@ void checkheap(int verbose, int lineno)
 
     // If verbose mode is enabled, print the heap starting address.
     if (verbose)
-        printf("[⭐]Heap (%p):\n", heap_listp);
+        printf("[⭐] Start of The Heap (%p):\n", heap_listp);
 
     // Check if the size of the prologue block is correct and if it is allocated.
     // The prologue block should have a size of DSIZE and be allocated.
@@ -493,8 +497,7 @@ void checkheap(int verbose, int lineno)
     }
 
     // If verbose mode is enabled, print the epilogue block.
-    if (1) {
-        printf("\nthe epilogue block: ");
+    if (verbose) {
         printblock(bp, lineno);
     }
         
@@ -502,7 +505,7 @@ void checkheap(int verbose, int lineno)
     // Check if the size of the epilogue block is zero and if it is allocated.
     // The epilogue block should have a size of 0 and be allocated.
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp)))) {
-        printf("bp: %p", bp);
+        printf("current bp: %p\n", bp);
         printMemoryContent(bp - WSIZE);
         printf("Line %d: Bad epilogue header.\n", lineno);
     }
@@ -518,7 +521,7 @@ void checkheap(int verbose, int lineno)
 void mm_check(int verbose, int lineno) {
     checkheap(verbose, lineno);
 
-    printf("[*] MM CHECK: Pass :) \n\n");
+    printf("[*] MM CHECK: Pass :) \n");
     return 1;
 }
 
@@ -557,9 +560,6 @@ static void add_to_free_list(char *bp) {
 
     // Update the dummy block's successor to the new block
     SET_SUCC(dummy_blockp, bp);
-
-    // printf("after add_to_free_list");
-    check(VERBOSE, __LINE__); 
 }
 
 
@@ -572,9 +572,6 @@ static void remove_from_free_list(char *bp) {
 
     SET_SUCC(prev_bp, next_bp);
     SET_PRED(next_bp, prev_bp);
-
-    // printf("After remove_from_free_list");
-    check(VERBOSE, __LINE__); 
 }
 
 // Define a function to print the memory contents at a given pointer.
