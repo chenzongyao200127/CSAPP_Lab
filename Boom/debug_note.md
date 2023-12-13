@@ -807,7 +807,7 @@ Dump of assembler code for function phase_6:
    0x000000000040117f <+139>:   jne    0x401176 <phase_6+130>
    0x0000000000401181 <+141>:   jmp    0x401188 <phase_6+148>
 
-   0x0000000000401183 <+143>:   mov    edx,0x6032d0
+   0x0000000000401183 <+143>:   mov    edx,0x6032d0   #(node1)
    0x0000000000401188 <+148>:   mov    QWORD PTR [rsp+rsi*2+0x20],rdx
    0x000000000040118d <+153>:   add    rsi,0x4
    0x0000000000401191 <+157>:   cmp    rsi,0x18
@@ -817,7 +817,7 @@ Dump of assembler code for function phase_6:
    0x000000000040119a <+166>:   cmp    ecx,0x1
    0x000000000040119d <+169>:   jle    0x401183 <phase_6+143>  #(ecx <= 1 then jump)
    0x000000000040119f <+171>:   mov    eax,0x1
-   0x00000000004011a4 <+176>:   mov    edx,0x6032d0
+   0x00000000004011a4 <+176>:   mov    edx,0x6032d0   # (node1)
    0x00000000004011a9 <+181>:   jmp    0x401176 <phase_6+130>
    0x00000000004011ab <+183>:   mov    rbx,QWORD PTR [rsp+0x20]
    0x00000000004011b0 <+188>:   lea    rax,[rsp+0x28]
@@ -851,20 +851,21 @@ Dump of assembler code for function phase_6:
 End of assembler dump.
 ~~~
 
+这个代码非常长，我们可以把它划分为几个部分，每个部分完成不同的功能，即不同的限制条件，第一部分是+23-+60，要求每个数小于等于6，第二部分+60-+95，是两个循环，用来判断数字两两之间不相等，第三部分是+108-128，将读来的6个数与7求差，再存入原来的地方，第四部分130-181，这个部分有一些复杂，相当于是在栈上存了些地址，可以发现+130 的代码为mov 0x8(%rdx),%rdx，这其实就是链表的形式，每次读取next地址，这段代码的意思是，用第三部分与7求出来的差值重新安排链表节点，1对应第一个节点，2对应第二个节点，依次类推；第五部分+183-257，用来判断重新构造出的链表里的数字满足严格递减。
 
+`node 1` 0x14c
+`node 2` 0xa8
+`node 3` 0x39c
+`node 4` 0x2bc
+`node 5` 0x1dd
+`node 6` 0x1bb
+正确的递减顺序应该是 3 4 5 6 1 2 
 
+我们利用gdb命令: x/24w 0x6032d0（每个节点占用了4个w）发现序号1-6的节点对应的数字为：332，168，924，691，477，413，为了使其严格递减，序号应该是：3，4，5，6，1，2，考虑到我们之前用7对传入的数字作差，为了得到这个序列，传入的数字应该是，4，3，2，1，6，5这就是我们最终的结果。
 
+总结下，这个函数是传入一个互不相等的，由6个数组成的数组，然后每个数与7作差，根据作差的结果，每个数对应原来链表的第一个节点，重新排序一个链表，要求这个链表的数值降序排列
 
-
-
-
-
-
-
-
-
-
-
+# 彩蛋求解
 ~~~c
 86          /* I guess this is too easy so far.  Some more complex code will
 87           * confuse people. */
@@ -899,7 +900,6 @@ End of assembler dump.
 114         return 0;
 115     }
 ~~~
-# 彩蛋
 
 ~~~shell
 (gdb) disas secret_phase
@@ -966,3 +966,105 @@ Dump of assembler code for function phase_defused:
    0x0000000000401658 <+148>:   retq   
 End of assembler dump.
 ~~~
+
+祭出IDA大法
+~~~c
+unsigned __int64 __fastcall phase_defused(__int64 a1, __int64 a2, __int64 a3, __int64 a4, __int64 a5, __int64 a6)
+{
+  __int64 v7; // [rsp+0h] [rbp-78h]
+  __int64 v8; // [rsp+8h] [rbp-70h] BYREF
+  char v9[88]; // [rsp+10h] [rbp-68h] BYREF
+  unsigned __int64 v10; // [rsp+68h] [rbp-10h]
+
+  v10 = __readfsqword(0x28u);
+  if ( num_input_strings == 6 )
+  {
+    if ( (unsigned int)__isoc99_sscanf(
+                         (__int64)&unk_603870,
+                         (__int64)"%d %d %s",
+                         (__int64)&v8,
+                         (__int64)&v8 + 4,
+                         (__int64)v9,
+                         a6,
+                         v7,
+                         v8) == 3
+      && !(unsigned int)strings_not_equal(v9, "DrEvil") )
+    {
+      puts("Curses, you've found the secret phase!");
+      puts("But finding it and solving it are quite different...");
+      secret_phase();
+    }
+    puts("Congratulations! You've defused the bomb!");
+  }
+  return __readfsqword(0x28u) ^ v10;
+}
+~~~
+
+~~~c
+// fun7
+__int64 __fastcall fun7(__int64 a1, __int64 a2)
+{
+  __int64 result; // rax
+
+  if ( !a1 )
+    return 0xFFFFFFFFLL;
+  if ( *(_DWORD *)a1 > (int)a2 )
+    return 2 * (unsigned int)fun7(*(_QWORD *)(a1 + 8), a2);
+  result = 0LL;
+  if ( *(_DWORD *)a1 != (_DWORD)a2 )
+    return 2 * (unsigned int)fun7(*(_QWORD *)(a1 + 16), a2) + 1;
+  return result;
+}
+~~~
+
+### 函数 `fun7`
+`fun7` 是一个递归函数，它接受两个参数 `a1` 和 `a2`。这个函数的工作方式是：
+1. **Base Case**:
+   - 如果 `a1` 为空（`!a1`），函数返回 `-1`（在 C 语言中，`0xFFFFFFFFLL` 是 `unsigned long long` 类型的 `-1`）。
+2. **Recursive Cases**:
+   - 如果 `a1` 所指向的值大于 `a2`，则递归调用 `fun7`，传入 `a1 + 8`（可能是树的左子节点）和 `a2`，返回值乘以 2。
+   - 如果 `a1` 所指向的值不等于 `a2`，则递归调用 `fun7`，传入 `a1 + 16`（可能是树的右子节点）和 `a2`，返回值乘以 2 并加 1。
+3. **Return 0**:
+   - 如果 `a1` 所指向的值等于 `a2`，则函数返回 `0`。
+~~~c
+
+__int64 secret_phase()
+{
+  const char *line; // rdi
+  unsigned int v1; // ebx
+
+  line = (const char *)read_line();
+  v1 = strtol(line, 0LL, 10);
+  if ( v1 - 1 > 0x3E8 )
+    explode_bomb(line, 0LL);
+  if ( (unsigned int)fun7(&n1, v1) != 2 )
+    explode_bomb(&n1, v1);
+  puts("Wow! You've defused the secret stage!");
+  return phase_defused();
+}
+~~~
+### 函数 `secret_phase`
+`secret_phase` 函数是用来处理 "秘密阶段" 的，它的工作方式如下：
+1. 读取一行输入，将其转换为一个整数（`strtol` 函数）。
+2. 检查输入的整数减 1 是否大于 1000（`0x3E8`）。如果是，触发 `explode_bomb`。
+3. 调用 `fun7` 函数，传入一个地址（`&n1`，可能是某种数据结构的起点，如一棵树的根节点）和读取的整数。如果 `fun7` 的返回值不是 `2`，触发 `explode_bomb`。
+4. 如果没有触发炸弹，输出成功信息并调用 `phase_defused` 函数。
+
+### 总结
+
+这个代码片段看起来是一种挑战型程序的一部分，可能是用来测试用户逻辑和编程能力的。用户需要输入一个特定的数字，这个数字会被用在一个递归搜索算法中（`fun7`）。如果输入的数字不能使 `fun7` 函数返回 `2`，程序会触发一个“炸弹”。这意味着要成功通过这个阶段，用户需要理解 `fun7` 函数的工作原理，并找出能产生正确结果的输入值。
+
+(master)⚡ [8] % ./bomb psol.txt                                                                       ~/new_space/CSAPP_Lab/Boom/bomb
+Welcome to my fiendish little bomb. You have 6 phases with
+which to blow yourself up. Have a nice day!
+Phase 1 defused. How about the next one?
+That's number 2.  Keep going!
+Halfway there!
+So you got that one.  Try this one.
+Good work!  On to the next...
+Curses, you've found the secret phase!
+But finding it and solving it are quite different...
+20
+Wow! You've defused the secret stage!
+Congratulations! You've defused the bomb!
+(master)⚡ %                     
