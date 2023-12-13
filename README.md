@@ -2,7 +2,7 @@
 
 TODO:
 1. Data Lab - 位操作，数据表示
-2. Bomb Lab - 汇编，栈帧与 gdb
+2. ~~Bomb Lab - 汇编，栈帧与 gdb~~
 3. Attack Lab - 漏洞是如何被攻击的
 4. Cache Lab - 实现一个缓存系统来加速计算
 5. Shell Lab - 实现一个 shell
