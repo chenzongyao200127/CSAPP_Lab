@@ -998,9 +998,7 @@ unsigned __int64 __fastcall phase_defused(__int64 a1, __int64 a2, __int64 a3, __
   }
   return __readfsqword(0x28u) ^ v10;
 }
-~~~
 
-~~~c
 // fun7
 __int64 __fastcall fun7(__int64 a1, __int64 a2)
 {
@@ -1015,18 +1013,7 @@ __int64 __fastcall fun7(__int64 a1, __int64 a2)
     return 2 * (unsigned int)fun7(*(_QWORD *)(a1 + 16), a2) + 1;
   return result;
 }
-~~~
 
-### 函数 `fun7`
-`fun7` 是一个递归函数，它接受两个参数 `a1` 和 `a2`。这个函数的工作方式是：
-1. **Base Case**:
-   - 如果 `a1` 为空（`!a1`），函数返回 `-1`（在 C 语言中，`0xFFFFFFFFLL` 是 `unsigned long long` 类型的 `-1`）。
-2. **Recursive Cases**:
-   - 如果 `a1` 所指向的值大于 `a2`，则递归调用 `fun7`，传入 `a1 + 8`（可能是树的左子节点）和 `a2`，返回值乘以 2。
-   - 如果 `a1` 所指向的值不等于 `a2`，则递归调用 `fun7`，传入 `a1 + 16`（可能是树的右子节点）和 `a2`，返回值乘以 2 并加 1。
-3. **Return 0**:
-   - 如果 `a1` 所指向的值等于 `a2`，则函数返回 `0`。
-~~~c
 
 __int64 secret_phase()
 {
@@ -1043,6 +1030,17 @@ __int64 secret_phase()
   return phase_defused();
 }
 ~~~
+
+### 函数 `fun7`
+`fun7` 是一个递归函数，它接受两个参数 `a1` 和 `a2`。这个函数的工作方式是：
+1. **Base Case**:
+   - 如果 `a1` 为空（`!a1`），函数返回 `-1`（在 C 语言中，`0xFFFFFFFFLL` 是 `unsigned long long` 类型的 `-1`）。
+2. **Recursive Cases**:
+   - 如果 `a1` 所指向的值大于 `a2`，则递归调用 `fun7`，传入 `a1 + 8`（可能是树的左子节点）和 `a2`，返回值乘以 2。
+   - 如果 `a1` 所指向的值不等于 `a2`，则递归调用 `fun7`，传入 `a1 + 16`（可能是树的右子节点）和 `a2`，返回值乘以 2 并加 1。
+3. **Return 0**:
+   - 如果 `a1` 所指向的值等于 `a2`，则函数返回 `0`。
+
 ### 函数 `secret_phase`
 `secret_phase` 函数是用来处理 "秘密阶段" 的，它的工作方式如下：
 1. 读取一行输入，将其转换为一个整数（`strtol` 函数）。
@@ -1068,3 +1066,112 @@ But finding it and solving it are quite different...
 Wow! You've defused the secret stage!
 Congratulations! You've defused the bomb!
 (master)⚡ %                     
+
+
+### 1. `phase_defused` Function:
+
+```c
+unsigned __int64 phase_defused() {
+    __int64 tempVar1; // Temporary variable
+    __int64 parsedValues; // Parsed values from the input
+    char inputString[88]; // Buffer for the input string
+    unsigned __int64 stackCanary = __readfsqword(0x28u);
+
+    if (num_input_strings == 6) {
+        if (__isoc99_sscanf(&inputSource, "%d %d %s", &parsedValues, &parsedValues + 4, inputString) == 3
+            && !strings_not_equal(inputString, "DrEvil")) {
+            puts("Curses, you've found the secret phase!");
+            puts("But finding it and solving it are quite different...");
+            secret_phase();
+        }
+        puts("Congratulations! You've defused the bomb!");
+    }
+    return __readfsqword(0x28u) ^ stackCanary;
+}
+```
+
+### 2. `fun7` Function:
+
+```c
+__int64 fun7(__int64 nodePtr, __int64 value) {
+    if (!nodePtr)
+        return -1;
+    
+    if (*(int *)nodePtr > value)
+        return 2 * fun7(*(long long *)(nodePtr + 8), value);
+    
+    if (*(int *)nodePtr != value)
+        return 2 * fun7(*(long long *)(nodePtr + 16), value) + 1;
+
+    return 0;
+}
+```
+
+### 3. `secret_phase` Function:
+
+```c
+__int64 secret_phase() {
+    const char *userInput;
+    unsigned int num;
+
+    userInput = read_line();
+    num = strtol(userInput, NULL, 10);
+
+    if (num - 1 > 1000)
+        explode_bomb(userInput);
+
+    if (fun7(&rootNode, num) != 2)
+        explode_bomb(&rootNode, num);
+
+    puts("Wow! You've defused the secret stage!");
+    return phase_defused();
+}
+```
+
+~~~shell
+gef➤  x /140 0x000000006030f0
+0x6030f0 <n1>:  36      0       6304016 0
+0x603100 <n1+16>:       6304048 0       0       0
+0x603110 <n21>: 8       0       6304144 0
+0x603120 <n21+16>:      6304080 0       0       0
+0x603130 <n22>: 50      0       6304112 0
+0x603140 <n22+16>:      6304176 0       0       0
+0x603150 <n32>: 22      0       6304368 0
+0x603160 <n32+16>:      6304304 0       0       0
+0x603170 <n33>: 45      0       6304208 0
+0x603180 <n33+16>:      6304400 0       0       0
+0x603190 <n31>: 6       0       6304240 0
+0x6031a0 <n31+16>:      6304336 0       0       0
+0x6031b0 <n34>: 107     0       6304272 0
+0x6031c0 <n34+16>:      6304432 0       0       0
+0x6031d0 <n45>: 40      0       0       0
+0x6031e0 <n45+16>:      0       0       0       0
+0x6031f0 <n41>: 1       0       0       0
+0x603200 <n41+16>:      0       0       0       0
+0x603210 <n47>: 99      0       0       0
+0x603220 <n47+16>:      0       0       0       0
+0x603230 <n44>: 35      0       0       0
+0x603240 <n44+16>:      0       0       0       0
+0x603250 <n42>: 7       0       0       0
+0x603260 <n42+16>:      0       0       0       0
+0x603270 <n43>: 20      0       0       0
+0x603280 <n43+16>:      0       0       0       0
+0x603290 <n46>: 47      0       0       0
+0x6032a0 <n46+16>:      0       0       0       0
+0x6032b0 <n48>: 1001    0       0       0
+0x6032c0 <n48+16>:      0       0       0       0
+~~~
+
+这段输出显示的是一种树形数据结构，具体来说，很可能是一棵二叉搜索树（Binary Search Tree, BST）。
+在这种结构中，每个节点通常包含几个元素：一个键值（key），指向左子节点的指针，和指向右子节点的指针。
+
+从提供的内存转储中，我们可以看到以下模式：
+
+- **节点的结构**：每个节点包含四个元素。以 `0x6030f0 <n1>` 为例，它的元素是 `36 0 6304016 0`。这里，`36` 是节点的键值，而 `6304016` 可能是指向另一个节点的指针。`0` 通常表示空指针或无效数据。
+
+- **节点的布局**：每个节点似乎按照 `16` 字节的间隔排列，这表明每个节点可能由四个 `4` 字节的部分组成。前两个部分可能是键值和保留空间，后两个部分则是左右子节点的指针。
+
+- **子节点指针**：在有些节点中，例如 `n1`，后两个数值中的一个（`6304016`）非零，这表示该节点有子节点。这个值应该是指向子节点的内存地址。
+
+这个内存转储提供了树的物理布局，但没有直接告诉我们树的逻辑结构（即节点如何相互连接）。要理解树的逻辑结构，通常需要通过遍历树（编程中的递归或迭代方法）来确定。
+结合你之前提供的 `fun7` 函数，该函数的行为进一步证实了这是一种二叉搜索树，其中 `fun7` 递归地查找给定值，并根据找到的路径返回特定的结果。
