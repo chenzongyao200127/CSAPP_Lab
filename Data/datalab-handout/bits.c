@@ -1,7 +1,8 @@
 /* 
  * CS:APP Data Lab 
  * 
- * <Please put your name and userid here>
+ * Chen Zongyao 
+ * solar1s@seu.edu.cn
  * 
  * bits.c - Source file with your solutions to the Lab.
  *          This is the file you will hand in to your instructor.
@@ -133,6 +134,7 @@ NOTES:
  */
 
 
+
 #endif
 //1
 /* 
@@ -142,20 +144,27 @@ NOTES:
  *   Max ops: 14
  *   Rating: 1
  */
+
+// A XOR B = (A AND NOT B) OR (NOT A AND B)
+// A OR B = NOT(NOT A AND NOT B)
+// A XOR B = NOT(NOT(A AND NOT B) AND NOT(NOT A AND B))
+// dlc:bits.c:153:bitXor: 7 operators
 int bitXor(int x, int y) {
-  return 2;
 }
+
 /* 
  * tmin - return minimum two's complement integer 
  *   Legal ops: ! ~ & ^ | + << >>
  *   Max ops: 4
  *   Rating: 1
  */
+// dlc:bits.c:166:tmin: 1 operators
+// 在补码表示法中，负数是通过取其正数形式的二进制反码然后加1来得到的
+// 最大的正数是 0111 1111 1111 1111 1111 1111 1111 1111（二进制，即2147483647十进制）
+// 最小的负数是 1000 0000 0000 0000 0000 0000 0000 0000（二进制，即-2147483648十进制）
 int tmin(void) {
-
-  return 2;
-
 }
+
 //2
 /*
  * isTmax - returns 1 if x is the maximum, two's complement number,
@@ -164,9 +173,15 @@ int tmin(void) {
  *   Max ops: 10
  *   Rating: 1
  */
+// int isTmax(int x) {
+//     return !((x + 1 + x) + 1) & !!(x + 1);
+// }
+// dlc:bits.c:178:isTmax: 7 operators
 int isTmax(int x) {
-  return 2;
 }
+
+
+
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
  *   where bits are numbered from 0 (least significant) to 31 (most significant)
@@ -175,9 +190,11 @@ int isTmax(int x) {
  *   Max ops: 12
  *   Rating: 2
  */
+// dlc:bits.c:193:allOddBits: 7 operators
 int allOddBits(int x) {
-  return 2;
 }
+
+
 /* 
  * negate - return -x 
  *   Example: negate(1) = -1.
@@ -185,9 +202,10 @@ int allOddBits(int x) {
  *   Max ops: 5
  *   Rating: 2
  */
+// dlc:bits.c:204:negate: 2 operators
 int negate(int x) {
-  return 2;
 }
+
 //3
 /* 
  * isAsciiDigit - return 1 if 0x30 <= x <= 0x39 (ASCII codes for characters '0' to '9')
@@ -198,9 +216,10 @@ int negate(int x) {
  *   Max ops: 15
  *   Rating: 3
  */
+// dlc:bits.c:220:isAsciiDigit: 9 operators
 int isAsciiDigit(int x) {
-  return 2;
 }
+
 /* 
  * conditional - same as x ? y : z 
  *   Example: conditional(2,4,5) = 4
@@ -208,9 +227,10 @@ int isAsciiDigit(int x) {
  *   Max ops: 16
  *   Rating: 3
  */
+// dlc:bits.c:232:conditional: 8 operators
 int conditional(int x, int y, int z) {
-  return 2;
 }
+
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
  *   Example: isLessOrEqual(4,5) = 1.
@@ -218,9 +238,10 @@ int conditional(int x, int y, int z) {
  *   Max ops: 24
  *   Rating: 3
  */
+// dlc:bits.c:267:isLessOrEqual: 13 operators
 int isLessOrEqual(int x, int y) {
-  return 2;
 }
+
 //4
 /* 
  * logicalNeg - implement the ! operator, using all of 
@@ -231,8 +252,9 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+
 }
+
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
  *  Examples: howManyBits(12) = 5
@@ -248,6 +270,8 @@ int logicalNeg(int x) {
 int howManyBits(int x) {
   return 0;
 }
+
+
 //float
 /* 
  * floatScale2 - Return bit-level equivalent of expression 2*f for

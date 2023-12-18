@@ -263,3 +263,28 @@ Total          89%      12  0.000001 12000
 
 Perf index = 54 (util) + 40 (thru) = 94/100
 ~~~
+
+# Final Result 
+Results for mm malloc:
+trace  valid  util     ops      secs  Kops
+ 0       yes   89%    5694  0.000476 11970
+ 1       yes   92%    5848  0.000177 33077
+ 2       yes   94%    6648  0.000275 24157
+ 3       yes   96%    5380  0.000205 26270
+ 4       yes   66%   14400  0.000144 99723
+ 5       yes   88%    4800  0.000414 11603
+ 6       yes   85%    4800  0.000436 11019
+ 7       yes   55%   12000  0.003900  3077
+ 8       yes   51%   24000  0.003277  7324
+ 9       yes   26%   14401  0.065886   219
+10       yes   34%   14401  0.002325  6194
+Total          71%  112372  0.077514  1450
+
+Perf index = 42 (util) + 40 (thru) = 82/100 
+correct:11
+perfidx:82
+
+还是有很大的优化空间
+
+# ToDo:
+实现 Segregated Free Lists
