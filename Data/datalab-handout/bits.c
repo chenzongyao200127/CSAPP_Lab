@@ -150,7 +150,9 @@ NOTES:
 // A XOR B = NOT(NOT(A AND NOT B) AND NOT(NOT A AND B))
 // dlc:bits.c:153:bitXor: 7 operators
 int bitXor(int x, int y) {
+    return ~(~x & ~y) & ~(x & y);
 }
+
 
 /* 
  * tmin - return minimum two's complement integer 
@@ -163,6 +165,7 @@ int bitXor(int x, int y) {
 // 最大的正数是 0111 1111 1111 1111 1111 1111 1111 1111（二进制，即2147483647十进制）
 // 最小的负数是 1000 0000 0000 0000 0000 0000 0000 0000（二进制，即-2147483648十进制）
 int tmin(void) {
+    return 1 << 31;
 }
 
 //2
@@ -178,7 +181,13 @@ int tmin(void) {
 // }
 // dlc:bits.c:178:isTmax: 7 operators
 int isTmax(int x) {
+    int candidate = x + 1;              // 对于Tmax，candidate变为Tmin，对于-1，变为0
+    int candidatePlusX = candidate + x; // 对于Tmax，结果为-1，对于-1，结果为-1
+    int isNotMinusOne = !!(candidate);  // 对于-1，candidate为0，对于Tmax，不为0
+    return !(candidatePlusX + 1) & isNotMinusOne;
 }
+
+
 
 
 
@@ -192,6 +201,9 @@ int isTmax(int x) {
  */
 // dlc:bits.c:193:allOddBits: 7 operators
 int allOddBits(int x) {
+    int mask = 0xAA + (0xAA << 8);
+    mask = mask + (mask << 16);
+    return !((x & mask) ^ mask);
 }
 
 
@@ -204,6 +216,7 @@ int allOddBits(int x) {
  */
 // dlc:bits.c:204:negate: 2 operators
 int negate(int x) {
+    return ~x + 1;
 }
 
 //3
@@ -218,7 +231,11 @@ int negate(int x) {
  */
 // dlc:bits.c:220:isAsciiDigit: 9 operators
 int isAsciiDigit(int x) {
+    int lowerBound = x + ~0x30 + 1; // x - 0x30
+    int upperBound = 0x39 + ~x + 1; // 0x39 - x
+    return !((lowerBound | upperBound) >> 31);
 }
+
 
 /* 
  * conditional - same as x ? y : z 
@@ -228,7 +245,14 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 // dlc:bits.c:232:conditional: 8 operators
+// int conditional(int x, int y, int z) {
+//     int mask = ~(!!x) + 1;
+//     return (y & mask) | (z & ~mask);
+// }
+
 int conditional(int x, int y, int z) {
+    x = ~(!x) + 1;
+    return (x & z) + (~x & y);
 }
 
 /* 
@@ -240,7 +264,17 @@ int conditional(int x, int y, int z) {
  */
 // dlc:bits.c:267:isLessOrEqual: 13 operators
 int isLessOrEqual(int x, int y) {
+    int xSign = x >> 31;              // 获取x的符号位
+    int ySign = y >> 31;              // 获取y的符号位
+    int diff = y + (~x + 1);          // 计算 y - x
+    int diffSign = diff >> 31;        // 获取y - x的符号位
+    
+    // 情况1: x和y符号相同，此时不会溢出，直接检查y - x是否非负
+    // 情况2: x是负数且y是正数，x一定小于y
+    // 情况3: x是正数且y是负数，x一定不小于y
+    return (!(xSign ^ ySign) & !diffSign) | (xSign & !ySign);
 }
+ 
 
 //4
 /* 
@@ -251,8 +285,9 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 12
  *   Rating: 4 
  */
+// dlc:bits.c:290:logicalNeg: 5 operators
 int logicalNeg(int x) {
-
+    return (((~ x + 1) | x) >> 31) + 1;
 }
 
 /* howManyBits - return the minimum number of bits required to represent x in
@@ -267,10 +302,29 @@ int logicalNeg(int x) {
  *  Max ops: 90
  *  Rating: 4
  */
+// Too Hard :(
 int howManyBits(int x) {
-  return 0;
+    int b16, b8, b4, b2, b1, b0;
+    int sign = x >> 31;
+    x = (sign & ~x) | (~sign & x);
+
+    b16 = !!(x >> 16) << 4;
+    x = x >> b16;
+    b8 = !!(x >> 8) << 3;
+    x = x >> b8;
+    b4 = !!(x >> 4) << 2;
+    x = x >> b4;
+    b2 = !!(x >> 2) << 1;
+    x = x >> b2;
+    b1 = !!(x >> 1);
+    x =x >> b1;
+    b0 = x;
+
+    return b16 + b8 + b4 + b2 + b1 + b0 + 1;
 }
 
+
+// 12/18/2023
 
 //float
 /* 
@@ -287,6 +341,7 @@ int howManyBits(int x) {
 unsigned floatScale2(unsigned uf) {
   return 2;
 }
+
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
  *   for floating point argument f.
@@ -302,6 +357,7 @@ unsigned floatScale2(unsigned uf) {
 int floatFloat2Int(unsigned uf) {
   return 2;
 }
+
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
  *   (2.0 raised to the power x) for any 32-bit integer x.
