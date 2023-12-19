@@ -284,7 +284,7 @@ Perf index = 42 (util) + 40 (thru) = 82/100
 correct:11
 perfidx:82
 
-还是有很大的优化空间
+效果还行，还是有很大的优化空间
 
 # ToDo:
 实现 Segregated Free Lists

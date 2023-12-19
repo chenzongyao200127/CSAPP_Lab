@@ -263,14 +263,11 @@ int conditional(int x, int y, int z)
 // dlc:bits.c:267:isLessOrEqual: 13 operators
 int isLessOrEqual(int x, int y)
 {
-    int xSign = x >> 31;       // 获取x的符号位
-    int ySign = y >> 31;       // 获取y的符号位
-    int diff = y + (~x + 1);   // 计算 y - x
-    int diffSign = diff >> 31; // 获取y - x的符号位
+    int xSign = x >> 31;
+    int ySign = y >> 31;
+    int diff = y + (~x + 1);
+    int diffSign = diff >> 31;
 
-    // 情况1: x和y符号相同，此时不会溢出，直接检查y - x是否非负
-    // 情况2: x是负数且y是正数，x一定小于y
-    // 情况3: x是正数且y是负数，x一定不小于y
     return (!(xSign ^ ySign) & !diffSign) | (xSign & !ySign);
 }
 
