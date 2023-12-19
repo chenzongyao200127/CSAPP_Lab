@@ -53,7 +53,7 @@ int mid_farm()
 /* Add two arguments */
 long add_xy(long x, long y)
 {
-    return x+y;
+    return x + y;
 }
 
 unsigned getval_481()
