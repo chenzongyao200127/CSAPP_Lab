@@ -276,3 +276,40 @@ Btest 不检查你的代码是否符合编码指南。使用 dlc 进行检查。
 
 例如，计算一个数的绝对值仅使用位级运算和直线代码，可能涉及检查符号位，然后条件性地反转所有位并增加一（这是二进制补码表示中的常见操作）。
 这种练习有助于学生深入理解计算机底层是如何处理数据的，特别是在没有高级语言特性如循环、分支或函数调用的情况下。
+
+# Result:
+~~~shell
+czy@czy-307-thinkcentre-m720q-n000: ~/new_space/CSAPP_Lab/Data/datalab-handout master!
+$ ./btest -g                                                                                                                [14:03:46]
+Score   Rating  Errors  Function
+ 1      1       0       bitXor
+ 1      1       0       tmin
+ 1      1       0       isTmax
+ 2      2       0       allOddBits
+ 2      2       0       negate
+ 3      3       0       isAsciiDigit
+ 3      3       0       conditional
+ 3      3       0       isLessOrEqual
+ 4      4       0       logicalNeg
+ 4      4       0       howManyBits
+ 4      4       0       floatScale2
+ 4      4       0       floatFloat2Int
+ 4      4       0       floatPower2
+Total points: 36/36
+ 
+czy@czy-307-thinkcentre-m720q-n000: ~/new_space/CSAPP_Lab/Data/datalab-handout master!
+$ ./dlc -e bits.c                                                                                                           [14:04:00]
+dlc:bits.c:153:bitXor: 7 operators
+dlc:bits.c:168:tmin: 1 operators
+dlc:bits.c:188:isTmax: 7 operators
+dlc:bits.c:204:allOddBits: 7 operators
+dlc:bits.c:217:negate: 2 operators
+dlc:bits.c:235:isAsciiDigit: 9 operators
+dlc:bits.c:254:conditional: 7 operators
+dlc:bits.c:275:isLessOrEqual: 13 operators
+dlc:bits.c:290:logicalNeg: 5 operators
+dlc:bits.c:324:howManyBits: 36 operators
+dlc:bits.c:370:floatScale2: 13 operators
+dlc:bits.c:424:floatFloat2Int: 16 operators
+dlc:bits.c:466:floatPower2: 9 operators
+~~~
