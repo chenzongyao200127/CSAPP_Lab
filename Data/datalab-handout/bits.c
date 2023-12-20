@@ -271,6 +271,12 @@ int isLessOrEqual(int x, int y)
     return (!(xSign ^ ySign) & !diffSign) | (xSign & !ySign);
 }
 
+// 在C中, 整数溢出是UB
+// int isLessOrEqual(int x, int y)
+// {
+//     return !((y + (~x + 1)) >> 31 & 1);
+// }
+
 // 4
 /*
  * logicalNeg - implement the ! operator, using all of

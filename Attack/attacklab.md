@@ -428,10 +428,10 @@ Some Advice:
 11 void touch3(char *sval)
 12 {
 13    vlevel = 3; /* 验证协议的一部分 */
-14    如果 (hexmatch(cookie, sval)) {
+14    if (hexmatch(cookie, sval)) {
 15        printf("Touch3!：你调用了 touch3(\"%s\")\n", sval);
 16        validate(3);
-17    } 否则 {
+17    } else {
 18        printf("未命中：你调用了 touch3(\"%s\")\n", sval);
 19        fail(3);
 20    }
