@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": false,
-      "cwd": "/home/czy/new_space/CSAPP_Lab/Data/datalab-handout",
-      "program": "/home/czy/new_space/CSAPP_Lab/Data/datalab-handout/build/Debug/outDebug",
+      "cwd": "/home/czy/new_space/CSAPP_Lab/Attack/target1",
+      "program": "/home/czy/new_space/CSAPP_Lab/Attack/target1/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

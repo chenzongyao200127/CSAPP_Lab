@@ -248,11 +248,19 @@ Some Advice:
 但在这种情况下，您必须让 touch2 看起来好像您已经将您的 cookie 作为其参数传递了。
 一些建议：
  • 您需要将注入代码的地址的字节表示定位在一个位置，使得 getbuf 代码末尾的 ret 指令将控制权转移给它。
- • 回想一下，函数的第一个参数是通过 %rdi 寄存器传递的。
+ • 回想一下，函数的第一个参数是通过 `%rdi` 寄存器传递的。
  • 您注入的代码应该设置寄存器为您的 cookie，然后使用 ret 指令将控制权转移给 touch2 中的第一条指令。
  • 不要尝试在您的攻击代码中使用 jmp 或 call 指令。这些指令的目的地址编码很难构造。即使您不是从调用中返回，也要使用 ret 指令进行所有控制权的转移。
  • 参见附录 B 中的讨论，了解如何使用工具生成指令序列的字节级表示。
 
+变量	相对于ebp	相对于esp
+函数调用者的变量	[ebp + 16]	[esp + 24]
+arg2	[ebp + 12]	[esp + 20]
+arg1	[ebp + 8]	[esp + 16]
+返回地址	[ebp + 4]	[esp + 12]
+保存的ebp	[ebp]	[esp + 8]
+local1	[ebp - 4]	[esp + 4]
+local2	[ebp - 8]	[esp]
 
 # B 生成字节码
 
@@ -301,3 +309,160 @@ example.o: 文件格式 elf64-x86-64
 ~~~
 
 这也是一个有效的输入，你可以在发送到目标程序之前通过 HEX2RAW 传递。
+
+
+# A 使用 HEX2RAW
+
+HEX2RAW 接受十六进制格式字符串作为输入。在这种格式中，每个字节值由两个十六进制数字表示。例如，字符串 “012345” 可以以十六进制格式输入为 “30 31 32 33 34 35 00。”（回想一下，十进制数字 x 的 ASCII 码是 0x3x，并且字符串的结尾由空字节表示。）
+
+传递给 HEX2RAW 的十六进制字符应由空白（空格或换行符）分隔。
+
+我们建议在你处理攻击字符串时，使用换行符分隔不同的部分。
+
+HEX2RAW 支持 C 风格的块注释，所以你可以标记攻击字符串的各个部分。例如：
+
+48 c7 c1 f0 11 40 00 /* mov $0x40011f0,%rcx */
+
+确保在开始和结束注释字符串（“/*”, “*/”）周围留有空间，这样注释就会被正确忽略。
+
+如果你在文件 exploit.txt 中生成了一个十六进制格式的攻击字符串，可以通过几种不同的方式将原始字符串应用到 CTARGET 或 RTARGET：
+
+1. 你可以设置一系列管道来通过 HEX2RAW 传递字符串。
+unix> cat exploit.txt | ./hex2raw | ./ctarget
+
+2. 你可以将原始字符串存储在文件中，并使用 I/O 重定向：
+unix> ./hex2raw < exploit.txt > exploit-raw.txt
+unix> ./ctarget < exploit-raw.txt
+这种方法也可以在 GDB 中运行时使用：
+unix> gdb ctarget
+(gdb) run < exploit-raw.txt
+
+3. 你可以将原始字符串存储在文件中，并将文件名作为命令行参数提供：
+unix> ./hex2raw < exploit.txt > exploit-raw.txt
+unix> ./ctarget -i exploit-raw.txt
+这种方法在 GDB 中运行时也可以使用。
+
+
+# 4.3 Level 3
+Phase 3 also involves a code injection attack, but passing a string as argument.
+
+Within the file `ctarget` there is code for functions hexmatch and touch3 having the following C representations:
+
+~~~c
+1 /* Compare string to hex represention of unsigned value */
+2 int hexmatch(unsigned val, char *sval)
+3 {
+4     char cbuf[110];
+5     /* Make position of check string unpredictable */
+6     char *s = cbuf + random() % 100;
+7     sprintf(s, "%.8x", val);
+8     return strncmp(sval, s, 9) == 0;
+9 }
+10
+11 void touch3(char *sval)
+12 {
+13    vlevel = 3; /* Part of validation protocol */
+14    if (hexmatch(cookie, sval)) {
+15    printf("Touch3!: You called touch3(\"%s\")\n", sval);
+16    validate(3);
+17 } else {
+18    printf("Misfire: You called touch3(\"%s\")\n", sval);
+19    fail(3);
+20 }
+21    exit(0);
+22 }
+~~~
+
+Your task is to get CTARGET to execute the code for touch3 rather than returning to test. You must make it appear to touch3 as if you have passed a string representation of your cookie as its argument.
+
+Some Advice:
+ • You will need to include a string representation of your cookie in your exploit string. The string should consist of the eight hexadecimal digits (ordered from most to least significant) without a leading “0x.”
+ • Recall that a string is represented in C as a sequence of bytes followed by a byte with value 0. Type “man ascii” on any Linux machine to see the byte representations of the characters you need.
+ • Your injected code should set register %rdi to the address of this string.
+ • When functions hexmatch and strncmp are called, they push data onto the stack, overwriting portions of memory that held the buffer used by getbuf. As a result, you will need to be careful where you place the string representation of your cookie.
+
+ 为了完成这个任务，你需要构造一个利用字符串的代码注入攻击，使得 `ctarget` 程序执行 `touch3` 函数。这个过程需要确保 `touch3` 函数接收到的参数看起来像是你的 cookie 的字符串表示。
+
+### 1. 构造 Cookie 字符串
+首先，你需要将你的 cookie 值转换为一个没有前导“0x”的8位十六进制数字字符串。例如，如果你的 cookie 是 `0x1234ABCD`，则字符串应该是 `"1234ABCD"`。此外，记得在字符串末尾添加一个 null 字节（`\0`）以符合 C 语言字符串的标准。
+
+### 2. 确定字符串的放置位置
+由于 `getbuf` 的栈空间将被 `hexmatch` 和 `strncmp` 函数调用中使用的数据覆盖，你需要在栈上找到一个安全的位置来存放这个字符串。
+通常，这意味着将字符串放置在攻击代码之后或在栈的某个其他位置。
+
+### 3. 编写注入代码
+你的注入代码需要执行以下操作：
+- 将你的 cookie 字符串的地址加载到 `%rdi` 寄存器中（在 x86-64 架构中，函数的第一个参数通过 `%rdi` 传递）。
+- 使用 `ret` 指令跳转到 `touch3` 函数的起始地址。
+
+### 4. 构造攻击字符串
+攻击字符串应该包含以下部分：
+- 一些填充字节，用于覆盖 `getbuf` 函数的局部变量和保存的帧指针。
+- 你的注入代码的机器码。
+- 你的 cookie 的字符串表示（可能还包括一些附加的填充，以确保它位于一个安全的位置）。
+- `touch3` 函数的地址，用于覆盖 `getbuf` 的返回地址。
+
+### 5. 调试和调整
+这个过程可能需要一些调试和调整，以确保所有的元素都放置在正确的位置，并且执行流按预期进行。
+
+当然，以下是提供的文本翻译成中文的版本：
+
+---
+
+# 4.3 第三阶段
+第三阶段也涉及代码注入攻击，但这次需要传递一个字符串作为参数。
+
+在文件 `ctarget` 中，有名为 hexmatch 和 touch3 的函数，它们在 C 语言中的定义如下：
+
+```c
+1 /* 比较字符串与无符号值的十六进制表示 */
+2 int hexmatch(unsigned val, char *sval)
+3 {
+4     char cbuf[110];
+5     /* 使检查字符串的位置不可预测 */
+6     char *s = cbuf + random() % 100;
+7     sprintf(s, "%.8x", val);
+8     return strncmp(sval, s, 9) == 0;
+9 }
+10
+11 void touch3(char *sval)
+12 {
+13    vlevel = 3; /* 验证协议的一部分 */
+14    如果 (hexmatch(cookie, sval)) {
+15        printf("Touch3!：你调用了 touch3(\"%s\")\n", sval);
+16        validate(3);
+17    } 否则 {
+18        printf("未命中：你调用了 touch3(\"%s\")\n", sval);
+19        fail(3);
+20    }
+21    exit(0);
+22 }
+```
+
+你的任务是操作 CTARGET 以执行 touch3 的代码，而不是返回到测试函数。你必须让它看起来像是你已经将你的 cookie 的字符串表示作为其参数传递了。
+
+一些建议：
+ • 你需要在你的利用字符串中包含你的 cookie 的字符串表示。字符串应该由八个十六进制数字组成（从最重要到最不重要的顺序排列），前面没有“0x”。
+ • 回想一下，C 语言中的字符串表示为一系列字节，后面跟着一个值为 0 的字节。在任何 Linux 机器上输入 “man ascii” 可以查看你需要的字符的字节表示。
+ • 你注入的代码应该将 %rdi 寄存器设置为这个字符串的地址。
+ • 当调用 hexmatch 和 strncmp 函数时，它们会将数据压入栈中，覆盖了 getbuf 使用的缓冲区所在的内存部分。因此，你需要小心地放置你的 cookie 的字符串表示。
+---
+
+~~~shell
+$rax        Return value
+$rbx        Callee saved
+$rcx        4th argument
+$rdx        3rd argument
+$rsi        2nd argument
+$rdi        1st argument
+$rbp        Callee saved
+$rsp        Stack Pointer
+$r8         5th argument
+$r9         6th argument
+$r10        Callee saved
+$r11        Used fot linking
+$r12        Unused for C
+$r13        Callee saved
+$r14        Callee saved
+$r15        Callee saved 
+~~~
