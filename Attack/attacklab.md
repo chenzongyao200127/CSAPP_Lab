@@ -194,3 +194,110 @@ Some Advice:
 
 
 
+# 4.2 Level 2
+
+Phase 2 involves injecting a small amount of code as part of your exploit string.
+
+Within the file ctarget there is code for a function touch2 having the following C representation:
+~~~c
+1 void touch2(unsigned val)
+2 {
+3   vlevel = 2; /* Part of validation protocol */
+4   if (val == cookie) {
+5     printf("Touch2!: You called touch2(0x%.8x)\n", val);
+6     validate(2);
+7   } else {
+8     printf("Misfire: You called touch2(0x%.8x)\n", val);
+9     fail(2);
+10  }
+11  exit(0);
+12 }
+~~~
+
+Your task is to get CTARGET to execute the code for touch2 rather than returning to test. 
+In this case, however, you must make it appear to touch2 as if you have passed your cookie as its argument.
+Some Advice:
+ • You will want to position a byte representation of the address of your injected code in such a way that ret instruction at the end of the code for getbuf will transfer control to it.
+• Recall that the first argument to a function is passed in register %rdi.
+• Your injected code should set the register to your cookie, and then use a ret instruction to transfer control to the first instruction in touch2.
+• Do not attempt to use jmp or call instructions in your exploit code. The encodings of destination addresses for these instructions are difficult to formulate. Use ret instructions for all transfers of control, even when you are not returning from a call.
+• See the discussion in Appendix B on how to use tools to generate the byte-level representations of instruction sequences.
+
+
+# 4.2 第二级
+
+第二阶段涉及到在您的攻击字符串中注入少量代码。
+
+在文件 ctarget 中，有一个名为 touch2 的函数，其 C 语言表示如下：
+~~~c
+1 void touch2(unsigned val)
+2 {
+3   vlevel = 2; /* 验证协议的一部分 */
+4   if (val == cookie) {
+5     printf("Touch2!：你调用了 touch2(0x%.8x)\n", val);
+6     validate(2);
+7   } else {
+8     printf("未命中：你调用了 touch2(0x%.8x)\n", val);
+9     fail(2);
+10  }
+11  exit(0);
+12 }
+~~~
+
+您的任务是让 CTARGET 执行 touch2 的代码，而不是返回到 test 函数。
+但在这种情况下，您必须让 touch2 看起来好像您已经将您的 cookie 作为其参数传递了。
+一些建议：
+ • 您需要将注入代码的地址的字节表示定位在一个位置，使得 getbuf 代码末尾的 ret 指令将控制权转移给它。
+ • 回想一下，函数的第一个参数是通过 %rdi 寄存器传递的。
+ • 您注入的代码应该设置寄存器为您的 cookie，然后使用 ret 指令将控制权转移给 touch2 中的第一条指令。
+ • 不要尝试在您的攻击代码中使用 jmp 或 call 指令。这些指令的目的地址编码很难构造。即使您不是从调用中返回，也要使用 ret 指令进行所有控制权的转移。
+ • 参见附录 B 中的讨论，了解如何使用工具生成指令序列的字节级表示。
+
+
+# B 生成字节码
+
+使用 GCC 作为汇编器和 OBJDUMP 作为反汇编器，可以方便地生成指令序列的字节码。例如，假设你编写了一个包含以下汇编代码的文件 example.s：
+
+# 手动生成的汇编代码示例
+
+~~~shell
+pushq $0xabcdef # 将值压入栈
+addq $17,%rax # 向 %rax 加 17
+movl %eax,%edx # 将低 32 位复制到 %edx
+~~~
+
+代码可以包含指令和数据的混合。‘#’字符右侧的任何内容都是注释。
+现在你可以汇编和反汇编这个文件：
+
+~~~shell
+unix> gcc -c example.s
+unix> objdump -d example.o > example.d
+~~~
+
+生成的文件 example.d 包含以下内容：
+example.o: 文件格式 elf64-x86-64
+反汇编 .text 段：
+
+~~~shell
+0000000000000000 <.text>:
+0: 68 ef cd ab 00 pushq $0xabcdef
+5: 48 83 c0 11 add $0x11,%rax
+9: 89 c2 mov %eax,%edx
+~~~
+
+底部的行显示了从汇编语言指令生成的机器码。每行左侧有一个十六进制数字，表示指令的起始地址（从0开始），而‘:’字符后的十六进制数字表示指令的字节码。
+因此，我们可以看到指令 `push $0xABCDEF` 的十六进制格式字节码是 `68 ef cd ab 00`。
+从这个文件中，你可以得到代码的字节序列：
+
+`68 ef cd ab 00 48 83 c0 11 89 c2`
+
+这个字符串然后可以通过 HEX2RAW 转换成目标程序的输入字符串。
+或者，你可以编辑 example.d 文件，省略不必要的值，并包含 C 风格的注释以提高可读性，得到：
+
+~~~shell
+68 ef cd ab 00 /* pushq $0xabcdef */
+48 83 c0 11 /* add $0x11,%rax */
+89 c2 /* mov %eax,%edx */
+~~~
+
+这也是一个有效的输入，你可以在发送到目标程序之前通过 HEX2RAW 传递。

