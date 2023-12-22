@@ -581,3 +581,75 @@ Some Advice:
  • 你可以只使用两个小工具来完成这次攻击。
  • 当一个小工具使用 popq 指令时，它会从栈中弹出数据。因此，你的利用字符串将包含小工具地址和数据的组合。
 ---
+
+# 5.2 Level 3
+
+Before you take on the Phase 5, pause to consider what you have accomplished so far. 
+
+In Phases 2 and 3, you caused a program to execute machine code of your own design. 
+If CTARGET had been a network server, you could have injected your own code into a distant machine. 
+In Phase 4, you circumvented two of the main devices modern systems use to thwart buffer overflow attacks. Although you did not inject your own code, you were able inject a type of program that operates by stitching together sequences of existing code.
+
+You have also gotten 95/100 points for the lab. That’s a good score. If you have other pressing obligations consider stopping right now.
+Phase 5 requires you to do an ROP attack on RTARGET to invoke function touch3 with a pointer to a string representation of your cookie. That may not seem significantly more difficult than using an ROP attack to invoke touch2, except that we have made it so. Moreover, Phase 5 counts for only 5 points, which is not a true measure of the effort it will require. Think of it as more an extra credit problem for those who want to go beyond the normal expectations for the course.
+
+To solve Phase 5, you can use gadgets in the region of the code in rtarget demarcated by functions start_farm and end_farm. In addition to the gadgets used in Phase 4, this expanded farm includes the encodings of different movl instructions, as shown in Figure 3C. The byte sequences in this part of the farm also contain 2-byte instructions that serve as functional nops, i.e., they do not change any register or
+memory values. These include instructions, shown in Figure 3D, such as andb %al,%al, that operate on the low-order bytes of some of the registers but do not change their values.
+
+Some Advice:
+ • You’ll want to review the effect a movl instruction has on the upper 4 bytes of a register, as is described on page 183 of the text.
+ • The official solution requires eight gadgets (not all of which are unique). 
+ Good luck and have fun!
+
+这段话的翻译是：
+
+# 5.2 第3级
+
+在你开始第5阶段之前，停下来考虑一下你到目前为止所完成的事情。
+
+在第2和第3阶段，你让程序执行了你自己设计的机器代码。如果CTARGET是一个网络服务器，你本可以将自己的代码注入到一个远程机器中。
+在第4阶段，你绕过了现代系统用来阻止缓冲区溢出攻击的两个主要设备。
+虽然你没有注入自己的代码，但你能够注入一种通过拼接现有代码序列来操作的程序。
+
+你在实验室也获得了95/100分。这是一个很好的成绩。如果你有其他紧急的事务，可以考虑现在就停下来。第5阶段要求你对RTARGET执行ROP攻击，以调用函数touch3和一个指向你cookie的字符串表示的指针。这可能看起来并不比使用ROP攻击调用touch2困难，**除非我们已经使其变得困难**。此外，第5阶段只占5分，这并不是对它所需努力的真实衡量。把它当作是那些想要超越课程正常期望的人的额外加分题。
+
+为了解决第5阶段，你可以在rtarget的代码区域中使用start_farm和end_farm函数标记的gadgets。除了在第4阶段使用的gadgets外，这个扩展的farm还包括不同movl指令的编码，如图3C所示。这部分farm中的字节序列还包含2字节的指令，它们充当功能性的nops，即它们不改变任何寄存器或内存值。这些包括图3D中所示的指令，例如andb %al,%al，它们作用于某些寄存器的低位字节但不改变其值。
+
+一些建议：
+ • 你可能想回顾一下movl指令对寄存器上4字节的影响，正如课本第183页所描述的那样。
+ • 官方解决方案需要八个gadgets（并非所有都是唯一的）。
+ 祝你好运，玩得开心！ 
+
+
+当然，我可以为你详细解释一下 `movl` 指令对寄存器上4字节的影响。请注意，这里的解释是基于一般的汇编语言和处理器架构，因为我无法访问特定课本中的内容。
+
+`movl` 是一种汇编语言指令，用于在x86架构的处理器上进行数据传输。这个指令的名称来源于 "move long"，意味着它用于移动长整型数据，即32位或4字节的数据。
+在32位架构中，寄存器大小通常是32位宽，所以 `movl` 指令会影响寄存器中的所有4个字节。
+
+以下是 `movl` 指令的一些关键点：
+
+1. **数据传输**：`movl` 指令通常用于将一个32位（4字节）的值从一个位置（可能是另一个寄存器或内存地址）传输到一个寄存器中。例如，`movl %eax, %ebx` 将会把寄存器 `%eax` 中的值复制到 `%ebx` 中。
+2. **覆盖现有数据**：执行 `movl` 指令时，目标寄存器中原有的数据会被完全覆盖。这意味着在传输后，目标寄存器仅包含新传入的值。
+3. **对标志寄存器的影响**：`movl` 指令不影响处理器的标志寄存器。这意味着不会改变像零标志（ZF）、符号标志（SF）或溢出标志（OF）这样的状态标志。
+4. **零扩展与符号扩展**：如果源数据小于32位，`movl` 指令会进行零扩展或符号扩展，以确保数据在移动到目标寄存器时占满32位。零扩展用于无符号数，而符号扩展用于带符号数。
+5. **使用场景**：`movl` 在多种情况下被使用，包括数据初始化、变量赋值、准备函数参数等。
+
+在 x86 汇编语言中，`movl` 指令用于移动（复制）32位数据，从一个源操作数到目的操作数。这里的 'l' 后缀表示 'long'，意味着操作涉及的是 32 位数据（或称为长字）。这个指令是更广泛的 `mov` 指令集的一部分，用于数据传输操作。
+
+关于 `movl` 指令对寄存器上方4字节的影响，重要的是理解 x86 架构中32位和64位寄存器的上下文。在64位的 x86（x86-64）架构中，寄存器有一个层次结构，每个寄存器可以以不同的大小被访问：
+
+- 64位大小（例如，累加器寄存器 `RAX`）
+- 32位大小（例如，`RAX` 的下方32位是 `EAX`）
+- 16位大小（例如，`EAX` 的下方16位是 `AX`）
+- 8位大小（例如，`AX` 的下方8位是 `AL`，上方8位是 `AH`）
+
+当你使用 `movl` 指令将数据移动到64位寄存器的32位部分（比如 `EAX`）时，它只影响那个寄存器的下方32位。上方的32位（在这个例子中，是 `RAX` 的上方部分）被清零。这是一个重要的行为，因为它确保寄存器的上方部分不保留任何以前的、可能无关的数据，这可能在某些操作中引起问题。
+
+例如，在64位系统上执行 `movl $0x12345678, %eax`：
+
+- 值 `0x12345678` 被移动到 `EAX` 寄存器。
+- `RAX` 的上方32位被设置为零。
+
+这种行为是64位上下文中 `movl` 特有的。相比之下，如果你使用了操作整个64位寄存器的指令（比如 `movq`），它会影响寄存器的全部64位，包括上方和下方部分。
+
+
