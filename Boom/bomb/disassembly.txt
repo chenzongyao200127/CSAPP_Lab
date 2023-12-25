@@ -246,7 +246,7 @@ Disassembly of section .text:
   400d77:	00 
   400d78:	74 1e                	je     400d98 <frame_dummy+0x28>
   400d7a:	b8 00 00 00 00       	mov    $0x0,%eax
-  400d7f:	48 85 c0             	test   %rax,%rax
+  4se00d7f:	48 85 c0             	test   %rax,%rax
   400d82:	74 14                	je     400d98 <frame_dummy+0x28>
   400d84:	55                   	push   %rbp
   400d85:	bf 08 2e 60 00       	mov    $0x602e08,%edi
