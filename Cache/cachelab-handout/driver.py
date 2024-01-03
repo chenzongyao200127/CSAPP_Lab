@@ -1,4 +1,4 @@
-#!/usr//bin/python
+#!/home/czy/miniconda3/envs/py27/bin/python
 #
 # driver.py - The driver tests the correctness of the student's cache
 #     simulator and the correctness and performance of their transpose
