@@ -287,6 +287,21 @@ Your code must be correct to receive any performance points for a particular siz
 
 In particular, it is perfectly OK for your function to explicitly check for the input sizes and implement separate code optimized for each case.
 
+对于B部分，我们将评估您的transpose_submit函数在三种不同大小的输出矩阵上的正确性和性能：
+- 32×32（M=32，N=32）
+- 64×64（M=64，N=64）
+- 61×67（M=61，N=67）
+
+对于每个矩阵大小，我们通过使用valgrind提取函数的地址追踪，然后使用参考模拟器在具有参数（s=5，E=1，b=5）的缓存上重放这个追踪，来评估您的transpose_submit函数的性能。
+
+您的性能得分将根据缓存未命中次数m线性计算，直到达到某个阈值：
+- 32×32：如果m<300，则得8分；如果m>600，则得0分
+- 64×64：如果m<1,300，则得8分；如果m>2,000，则得0分
+- 61×67：如果m<2,000，则得10分；如果m>3,000，则得0分
+
+只有当您的代码正确时，您才能获得特定大小的性能分数。您的代码只需对这三种情况正确，您可以专门为这三种情况进行优化。
+
+特别是，您的函数明确检查输入大小并为每种情况实现专门优化的代码是完全可以接受的。
 
 ### 5.3 Evaluation for Style
 There are 7 points for coding style. These will be assigned manually by the course staff.  
@@ -332,6 +347,8 @@ See “man 3 getopt” for details
 
 - Each data load (L) or store (S) operation can cause at most one cache miss. The data modify operation (M) is treated as a load followed by a store to the same address. Thus, an M operation can result in two cache hits, or a miss and a hit plus a possible eviction
 - If you would like to use C0-style contracts from 15-122, you can include contracts.h, which we have provided in the handout directory for your convenience.
+
+一些编码提示：
 
 - 在小型跟踪记录上进行初步调试，例如使用 traces/dave.trace。
 - 参考模拟器接受一个可选的 -v 参数，该参数启用详细输出，显示由每次内存访问引起的命中、未命中和驱逐。你不需要在你的 csim.c 代码中实现这个功能，但我们强烈建议你这样做。通过允许你直接比较你的模拟器与参考模拟器在参考跟踪文件上的行为，这将帮助你进行调试。
@@ -382,19 +399,31 @@ For example, to test your registered transpose functions on a 32 × 32 matrix, r
 
 ~~~shell
   linux> make
-  linux> ./test-trans -M 32 -N 32
-  Step 1: Evaluating registered transpose funcs for correctness:
-  func 0 (Transpose submission): correctness: 1
-  func 1 (Simple row-wise scan transpose): correctness: 1
-  func 2 (column-wise scan transpose): correctness: 1
-  func 3 (using a zig-zag access pattern): correctness: 1
-  Step 2: Generating memory traces for registered transpose funcs.
-  Step 3: Evaluating performance of registered transpose funcs (s=5, E=1, b=5)
-  func 0 (Transpose submission): hits:1766, misses:287, evictions:255
-  func 1 (Simple row-wise scan transpose): hits:870, misses:1183, evictions:1151
-  func 2 (column-wise scan transpose): hits:870, misses:1183, evictions:1151
-  func 3 (using a zig-zag access pattern): hits:1076, misses:977, evictions:945
-  Summary for official submission (func 0): correctness=1 misses=287
+  (base) [czy:..._Lab/Cache/cachelab-handout]$ ./test-trans -M 32 -N 32                                                       (master✱) 
+
+  Function 0 (4 total)
+  Step 1: Validating and generating memory traces
+  Step 2: Evaluating performance (s=5, E=1, b=5)
+  func 0 (Transpose submission): hits:1709, misses:344, evictions:312
+
+  Function 1 (4 total)
+  Step 1: Validating and generating memory traces
+  Step 2: Evaluating performance (s=5, E=1, b=5)
+  func 1 (Simple row-wise scan transpose): hits:869, misses:1184, evictions:1152
+
+  Function 2 (4 total)
+  Step 1: Validating and generating memory traces
+  Step 2: Evaluating performance (s=5, E=1, b=5)
+  func 2 (一个针对61x67大小矩阵优化的转置): hits:869, misses:1184, evictions:1152
+
+  Function 3 (4 total)
+  Step 1: Validating and generating memory traces
+  Validation error at function 3! Run ./tracegen -M 32 -N 32 -F 3 for details.
+  Skipping performance evaluation for this function.
+
+  Summary for official submission (func 0): correctness=1 misses=344
+
+  TEST_TRANS_RESULTS=1:344
 ~~~
 
 In this example, we have registered four different transpose functions in trans.c. The test-trans program tests each of the registered functions, displays the results for each, and extracts the results for the official submission.
@@ -415,6 +444,73 @@ Here are some hints and suggestions for working on Part B.
  - Since your transpose function is being evaluated on a direct-mapped cache, conflict misses are a potential problem. Think about the potential for conflict misses in your code, especially along the diagonal. Try to think of access patterns that will decrease the number of these conflict misses.
  - Blocking is a useful technique for reducing cache misses. See http://csapp.cs.cmu.edu/public/waside/waside-blocking.pdffor more information.
  - Because valgrind introduces many stack accesses that have nothing to do with your code, we have filtered out all stack accesses from the trace. This is why we have banned local arrays and placed limits on the number of local variables.
+
+## 6.2 在B部分工作
+
+我们为您提供了一个自动评分程序，名为test-trans.c，它用来测试您已经在自动评分器中注册的每个转置函数的正确性和性能。
+
+您可以在trans.c文件中注册多达100个版本的转置函数。每个转置版本的形式如下：
+
+~~~c
+/* 头注释 */
+char trans_simple_desc[] = "一个简单的转置";
+void trans_simple(int M, int N, int A[N][M], int B[M][N])
+{
+/* 您的转置代码在这里 */
+}
+~~~
+
+通过在trans.c中的registerFunctions函数里调用以下形式来注册一个特定的转置函数：
+
+~~~c
+registerTransFunction(trans_simple, trans_simple_desc);
+~~~
+
+在运行时，自动评分器将评估每个注册的转置函数并打印结果。当然，您提交的transpose_submit函数必须是其中一个已注册的函数：
+~~~c
+registerTransFunction(transpose_submit, transpose_submit_desc);
+~~~
+
+有关如何操作的示例，请参见默认的trans.c函数。
+
+自动评分器以矩阵大小作为输入。它使用valgrind生成每个已注册转置函数的追踪。然后通过在具有参数的缓存上运行参考模拟器来评估每个追踪（s=5，E=1，b=5）。
+
+例如，要测试您在32×32矩阵上注册的转置函数，请重建test-trans，然后用适当的M和N值运行它：
+
+~~~shell
+  linux> make
+  linux> ./test-trans -M 32 -N 32
+  Step 1: Evaluating registered transpose funcs for correctness:
+  func 0 (Transpose submission): correctness: 1
+  func 1 (Simple row-wise scan transpose): correctness: 1
+  func 2 (column-wise scan transpose): correctness: 1
+  func 3 (using a zig-zag access pattern): correctness: 1
+  Step 2: Generating memory traces for registered transpose funcs.
+  Step 3: Evaluating performance of registered transpose funcs (s=5, E=1, b=5)
+  func 0 (Transpose submission): hits:1766, misses:287, evictions:255
+  func 1 (Simple row-wise scan transpose): hits:870, misses:1183, evictions:1151
+  func 2 (column-wise scan transpose): hits:870, misses:1183, evictions:1151
+  func 3 (using a zig-zag access pattern): hits:1076, misses:977, evictions:945
+  Summary for official submission (func 0): correctness=1 misses=287
+~~~
+
+在这个例子中，我们在trans.c中注册了四个不同的转置函数。test-trans程序测试了每个已注册的函数，显示了每个函数的结果，并提取了官方提交的结果。
+
+以下是在B部分工作时的一些提示和建议。
+- test-trans程序将函数i的追踪保存在trace.fi文件中。这些追踪文件是非常宝贵的调试工具，可以帮助您准确了解每个转置函数的命中和未命中是如何产生的。要调试特定的函数，只需通过参考模拟器运行其追踪，并使用详细选项：
+
+    linux> ./csim-ref -v -s 5 -E 1 -b 5 -t trace.f0
+    S 68312c,1 未命中
+    L 683140,8 未命中
+    L 683124,4 命中
+    L 683120,4 命中
+    L 603124,4 未命中 驱逐
+    S 6431a0,4 未命中
+    ...
+
+- 由于您的转置函数在直接映射缓存上进行评估，冲突未命中可能是一个问题。思考您代码中可能的冲突未命中，特别是沿着对角线。尝试想出减少这些冲突未命中数量的访问模式。
+- 分块是减少缓存未命中的一个有用技术。更多信息，请见 [http://csapp.cs.cmu.edu/public/waside/waside-blocking.pdf](http://csapp.cs.cmu.edu/public/waside/waside-blocking.pdf)。
+- 由于valgrind引入了许多与您的代码无关的栈访问，我们已经过滤掉了所有栈访问。这就是为什么我们禁止使用局部数组，并限制了局部变量的数量。
 
 ### 6.3 Putting it all Together
 We have provided you with a driver program, called ./driver.py, that performs a complete evaluation of your simulator and transpose code. This is the same program your instructor uses to evaluate your handins. The driver uses test-csim to evaluate your simulator, and it uses test-trans to evaluate your submitted transpose function on the three matrix sizes. Then it prints a summary of your results and the points you have earned.
