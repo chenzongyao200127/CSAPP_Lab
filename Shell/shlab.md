@@ -12,7 +12,7 @@ Start by copying the file shlab-handout.tar to the protected directory (the lab 
  - Type the command make to compile and link some test routines.
  - Type your team member names and Andrew IDs in the header comment at the top of `tsh.c`.
   
-Looking at the tsh.c (tiny shell) file, you will see that it contains a functional skeleton of a simple Unix shell. 
+Looking at the `tsh.c` (tiny shell) file, you will see that it contains a functional skeleton of a simple Unix shell. 
 To help you get started, we have already implemented the less interesting functions. 
 Your assignment is to complete the remaining empty functions listed below. 
 As a sanity check for you, we’ve listed the approximate number of lines of code for each of these functions in our reference solution (which includes lots of comments)
@@ -42,9 +42,15 @@ tsh> [type commands to your shell here]
 
 A shell is an interactive command-line interpreter that runs programs on behalf of the user. A shell repeatedly prints a prompt, waits for a command line on stdin, and then carries out some action, as directed by the contents of the command line.
 
-The command line is a sequence of ASCII text words delimited by whitespace. The first word in the command line is either the name of a built-in command or the pathname of an executable file. The remaining words are command-line arguments. If the first word is a built-in command, the shell immediately executes the command in the current process. Otherwise, the word is assumed to be the pathname of an executable program. In this case, the shell forks a child process, then loads and runs the program in the context of the child. The child processes created as a result of interpreting a single command line are known collectively as a job. In general, a job can consist of multiple child processes connected by Unix pipes.
+The command line is a sequence of ASCII text words delimited by whitespace. The first word in the command line is either the name of a built-in command or the pathname of an executable file. The remaining words are command-line arguments. 
 
-If the command line ends with an ampersand ”&”, then the job runs in the background, which means that the shell does not wait for the job to terminate before printing the prompt and awaiting the next command line. Otherwise, the job runs in the foreground, which means that the shell waits for the job to terminate before awaiting the next command line. Thus, at any point in time, at most one job can be running in the foreground. However, an arbitrary number of jobs can run in the background. 
+If the first word is a built-in command, the shell immediately executes the command in the current process. Otherwise, the word is assumed to be the pathname of an executable program. 
+
+In this case, the shell forks a child process, then loads and runs the program in the context of the child. The child processes created as a result of interpreting a single command line are known collectively as a job. In general, a job can consist of multiple child processes connected by Unix pipes.
+
+If the command line ends with an ampersand ”&”, then the job runs in the background, which means that the shell does not wait for the job to terminate before printing the prompt and awaiting the next command line. 
+
+Otherwise, the job runs in the foreground, which means that the shell waits for the job to terminate before awaiting the next command line. Thus, at any point in time, at most one job can be running in the foreground. However, an arbitrary number of jobs can run in the background. 
 
 For example, typing the command line
 
@@ -82,7 +88,9 @@ Unix shells support the notion of job control, which allows users to move jobs b
 
 Typing ctrl-c causes a SIGINT signal to be delivered to each process in the foreground job. The default action for SIGINT is to terminate the process. 
 
-Similarly, typing ctrl-z causes a SIGTSTP signal to be delivered to each process in the foreground job. The default action for SIGTSTP is to place a process in the stopped state, where it remains until it is awakened by the receipt of a SIGCONT signal. Unix shells also provide various built-in commands that support job control. 
+Similarly, typing ctrl-z causes a SIGTSTP signal to be delivered to each process in the foreground job. 
+
+The default action for SIGTSTP is to place a process in the stopped state, where it remains until it is awakened by the receipt of a SIGCONT signal. Unix shells also provide various built-in commands that support job control. 
 
 For example:
  • `jobs`: List the running and stopped background jobs.
@@ -95,39 +103,30 @@ For example:
 Your tsh shell should have the following features:
 
 1. The prompt should be the string “`tsh>` ”.
-2. The command line typed by the user should consist of a name and zero or more arguments, all separated by one or more spaces. If name is a built-in command, then tsh should handle it immediately and wait for the next command line. Otherwise, tsh should assume that name is the path of an executable file, which it loads and runs in the context of an initial child process (In this context, the term job refers to this initial child process)
+   
+2. The command line typed by the user should consist of a name and zero or more arguments, all separated by one or more spaces. 
+   If name is a built-in command, then tsh should handle it immediately and wait for the next command line. 
+   Otherwise, tsh should assume that name is the path of an executable file, which it loads and runs in the context of an initial child process (In this context, the term job refers to this initial child process)
+   
 3. tsh need not support pipes (|) or I/O redirection (< and >)
-4. Typing ctrl-c (ctrl-z) should cause a SIGINT (SIGTSTP) signal to be sent to the current foreground job, as well as any descendents of that job (e.g., any child processes that it forked). If there is no foreground job, then the signal should have no effect
-5. If the command line ends with an ampersand &, then tsh should run the job in the background. Otherwise, it should run the job in the foreground.
-6. Each job can be identified by either a process ID (PID) or a job ID (JID), which is a positive integer assigned by tsh. JIDs should be denoted on the command line by the prefix ’%’. For example, “%5” denotes JID 5, and “5” denotes PID 5. (We have provided you with all of the routines you need for manipulating the job list.)
+   
+4. Typing `ctrl-c` (`ctrl-z`) should cause a SIGINT (SIGTSTP) signal to be sent to the current foreground job, as well as any descendents of that job (e.g., any child processes that it forked). If there is no foreground job, then the signal should have no effect
+   
+5. If the command line ends with an ampersand `&`, then tsh should run the job in the background. 
+   Otherwise, it should run the job in the foreground.
+   
+6. Each job can be identified by either a process ID (PID) or a job ID (JID), which is a positive integer assigned by tsh. 
+   JIDs should be denoted on the command line by the prefix ’`%`’. 
+   For example, “%5” denotes JID 5, and “5” denotes PID 5. 
+   (We have provided you with all of the routines you need for manipulating the job list.)
+
 7. tsh should support the following built-in commands:
-   1. The quit command terminates the shell.
-   2. The jobs command lists all background jobs.
-   3. The bg <job> command restarts <job> by sending it a SIGCONT signal, and then runs it in the background. The <job> argument can be either a PID or a JID.
-   4. The fg <job> command restarts <job> by sending it a SIGCONT signal, and then runs it in the foreground. The <job> argument can be either a PID or a JID.
+   1. The `quit` command terminates the shell.
+   2. The `jobs` command lists all background jobs.
+   3. The `bg <job>` command restarts <job> by sending it a SIGCONT signal, and then runs it in the background. The <job> argument can be either a PID or a JID.
+   4. The `fg <job>` command restarts <job> by sending it a SIGCONT signal, and then runs it in the foreground. The <job> argument can be either a PID or a JID.
+
 8. tsh should reap all of its zombie children. If any job terminates because it receives a signal that it didn’t catch, then tsh should recognize this event and print a message with the job’s PID and a description of the offending signal.
-
-Translation:
-
-1. 提示符应该是字符串 "`tsh>`"。
-   
-2. 用户键入的命令行应由一个名称和零个或多个参数组成，所有这些都由一个或多个空格分隔。如果名称是内置命令，那么tsh应该立即处理它并等待下一个命令行。否则，tsh应该假设名称是可执行文件的路径，它加载并在初始子进程的上下文中运行该文件（在这个上下文中，“作业”一词指的是这个初始子进程）。
-   
-3. tsh不需要支持管道（|）或I/O重定向（< 和 >）。
-   
-4. 输入ctrl-c（ctrl-z）应该导致SIGINT（SIGTSTP）信号发送到当前前台作业，以及该作业的任何后代（例如，它所fork的任何子进程）。如果没有前台作业，那么该信号应该没有效果。
-   
-5. 如果命令行以和号&结尾，则tsh应该在后台运行作业。否则，它应该在前台运行作业。
-   
-6. 每个作业都可以通过进程ID（PID）或作业ID（JID）来识别，后者是tsh分配的一个正整数。JIDs应该在命令行中用前缀'%'表示。例如，“%5”表示JID 5，“5”表示PID 5。（我们已经为您提供了操纵作业列表所需的所有程序。）
-   
-7. tsh应该支持以下内置命令：
-   1. quit命令终止shell。
-   2. jobs命令列出所有后台作业。
-   3. bg <job>命令通过发送SIGCONT信号来重启<job>，然后在后台运行它。 <job>参数可以是PID或JID。
-   4. fg <job>命令通过发送SIGCONT信号来重启<job>，然后在前台运行它。 <job>参数可以是PID或JID。
-
-8. tsh应该清理掉所有的僵尸子进程。如果任何作业因为接收到它没有捕获的信号而终止，那么tsh应该识别这一事件并打印一条消息，包含作业的PID和有关信号的描述。
 
 # Checking Your Work
 We have provided some tools to help you check your work.
