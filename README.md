@@ -5,7 +5,7 @@ TODO:
 2. ~~Bomb Lab - 汇编，栈帧与 gdb~~
 3. ~~attack Lab - 漏洞是如何被攻击的~~
 4. Architechture Lab
-5. Cache Lab - 实现一个缓存系统来加速计算
+5. ~~Cache Lab - 实现一个缓存系统来加速计算~~
 6. Performance Lab
 7. Shell Lab - 实现一个 shell
 8. ~~Malloc Lab - 实现一个动态内存分配器~~
