@@ -29,49 +29,65 @@ typedef struct CacheSet
     int numLines;     // Number of lines in the set
 } CacheSet;
 
+// Parses command-line arguments to set cache parameters and flags.
 void parseArgs(int argc, char *argv[]);
+// Processes a single line of the cache trace, updating cache state and handling verbose output.
 void parseLine(char *line, CacheSet *cache);
+// Prints a summary of cache hits, misses, and evictions.
 void printSummary();
 
+// Checks if a tag is present in a given cache set and updates the set based on LRU policy.
+// Returns 1 if hit, 0 if miss.
 int checkAndUpdateSet(CacheSet *set, unsigned long tag);
+// Adds a new line to a cache set or replaces the least recently used line based on LRU policy.
 void addOrReplaceLine(CacheSet *set, unsigned long tag);
+// Accesses the cache with the given address, updates cache state, and returns the result string.
 void accessCache(CacheSet *cache, unsigned long address, char *result);
-CacheSet createCacheSet(int E);
+// Prints detailed information about a cache access (used when verbose flag is set).
 void printAccessDetails(char op, unsigned long address, int size, char *result);
+
+// Creates and initializes a single cache set with the specified number of lines (E).
+CacheSet createCacheSet(int E);
+// Creates the entire cache structure based on the current configuration.
 CacheSet *createCache();
+// Frees all memory allocated for the cache.
 void freeCache(CacheSet *cache);
 
-// Main function
+// Main function of the program.
 int main(int argc, char *argv[])
 {
-    // Parse command line arguments
+    // Parse the command line arguments to set cache parameters and options.
     parseArgs(argc, argv);
 
-    // construct cache memories
+    // Construct the cache data structure based on the provided parameters.
     CacheSet *cache = createCache();
 
-    // open trace file
+    // Open the trace file for reading cache access patterns.
     FILE *file = fopen(tracefile, "r");
     if (file == NULL)
     {
+        // Print an error message and exit if the trace file cannot be opened.
         perror("Error opening trace file");
         exit(EXIT_FAILURE);
     }
 
-    char line[256];
+    char line[256]; // Buffer to hold each line read from the trace file.
 
+    // Read the trace file line by line and process each cache access.
     while (fgets(line, sizeof(line), file))
     {
         parseLine(line, cache);
     }
 
-    // Placeholder for function 'printSummary' to summarize the cache simulation
+    // Print a summary of cache hits, misses, and evictions after processing the trace file.
     printSummary(hits, misses, evictions);
 
+    // Close the trace file.
     fclose(file);
+    // Free all memory allocated for the cache to avoid memory leaks.
     freeCache(cache);
 
-    return 0;
+    return 0; // Return 0 to indicate successful execution.
 }
 
 // Function to parse command line arguments
@@ -163,6 +179,7 @@ void parseLine(char *line, CacheSet *cache)
         }
     }
 }
+
 // Function to extract set index and tag from an address
 void getSetIndexAndTag(unsigned long address, unsigned long *setIndex, unsigned long *tag)
 {
