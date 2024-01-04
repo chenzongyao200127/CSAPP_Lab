@@ -114,22 +114,87 @@ void trans_32x32(int M, int N, int A[N][M], int B[M][N])
 
 // Description: Optimized matrix transposition for a 64x64 matrix
 char trans_64x64_desc[] = "一个针对64x64大小矩阵优化的转置";
-
+// reference：
+// 1.https://zhuanlan.zhihu.com/p/387662272
+// 2.https://www.zhihu.com/column/c_1480603406519238656
 void trans_64x64(int M, int N, int A[N][M], int B[M][N])
 {
-    int blockSize = 32; // 子矩阵大小是32x32
+    int a_0, a_1, a_2, a_3, a_4, a_5, a_6, a_7;
 
-    for (int i = 0; i < N; i += blockSize)
+    // Loop over the matrix in 8x8 blocks to optimize cache usage.
+    for (int i = 0; i < 64; i += 8)
     {
-        for (int j = 0; j < M; j += blockSize)
+        for (int j = 0; j < 64; j += 8)
         {
-            int(*subA)[blockSize] = (int(*)[blockSize]) & A[i][j];
+            // Transpose the upper left 4x4 part of the current 8x8 block.
+            for (int k = i; k < i + 4; k++)
+            {
+                // Load one row of the block into local variables.
+                a_0 = A[k][j + 0];
+                a_1 = A[k][j + 1];
+                a_2 = A[k][j + 2];
+                a_3 = A[k][j + 3];
+                a_4 = A[k][j + 4];
+                a_5 = A[k][j + 5];
+                a_6 = A[k][j + 6];
+                a_7 = A[k][j + 7];
 
-            int newI = j;
-            int newJ = i;
-            int(*subB)[blockSize] = (int(*)[blockSize]) & B[newI][newJ];
+                // Write the transposed row to B.
+                B[j + 0][k] = a_0;
+                B[j + 1][k] = a_1;
+                B[j + 2][k] = a_2;
+                B[j + 3][k] = a_3;
 
-            trans_32x32(blockSize, blockSize, subA, subB);
+                // Store the elements that will be moved to the lower right 4x4 part of the block.
+                B[j + 0][k + 4] = a_4;
+                B[j + 1][k + 4] = a_5;
+                B[j + 2][k + 4] = a_6;
+                B[j + 3][k + 4] = a_7;
+            }
+
+            // Adjust the lower left and upper right 4x4 parts of the block.
+            for (int k = j; k < j + 4; k++)
+            {
+                // Temporarily store the values from B that will be moved to the lower left 4x4 part.
+                a_0 = B[k][i + 4];
+                a_1 = B[k][i + 5];
+                a_2 = B[k][i + 6];
+                a_3 = B[k][i + 7];
+
+                // Load the upper right 4x4 part of A.
+                a_4 = A[i + 4][k];
+                a_5 = A[i + 5][k];
+                a_6 = A[i + 6][k];
+                a_7 = A[i + 7][k];
+
+                // Complete the transposition of the upper right 4x4 part.
+                B[k][i + 4] = a_4;
+                B[k][i + 5] = a_5;
+                B[k][i + 6] = a_6;
+                B[k][i + 7] = a_7;
+
+                // Move the temporarily stored values to the lower left 4x4 part.
+                B[k + 4][i + 0] = a_0;
+                B[k + 4][i + 1] = a_1;
+                B[k + 4][i + 2] = a_2;
+                B[k + 4][i + 3] = a_3;
+            }
+
+            // Transpose the lower right 4x4 part of the current 8x8 block.
+            for (int k = i + 4; k < i + 8; k++)
+            {
+                // Load one row of the block into local variables.
+                a_4 = A[k][j + 4];
+                a_5 = A[k][j + 5];
+                a_6 = A[k][j + 6];
+                a_7 = A[k][j + 7];
+
+                // Write the transposed row to B.
+                B[j + 4][k] = a_4;
+                B[j + 5][k] = a_5;
+                B[j + 6][k] = a_6;
+                B[j + 7][k] = a_7;
+            }
         }
     }
 }
