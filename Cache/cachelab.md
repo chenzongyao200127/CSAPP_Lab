@@ -53,6 +53,32 @@ The operation field denotes the type of memory access:
  - “M” a data modify (i.e., a data load followed by a data store). 
 There is never a space before each “I”. There is always a space before each “M”, “L”, and “S”. The address field specifies a 64-bit hexadecimal memory address. The size field specifies the number of bytes accessed by the operation.
 
+发放目录中的 traces 子目录包含一系列参考跟踪文件，我们将使用这些文件来评估你在第 A 部分编写的缓存模拟器的正确性。
+这些跟踪文件是由一个名为 valgrind 的 Linux 程序生成的。例如，在命令行输入
+
+linux> valgrind --log-fd=1 --tool=lackey -v --trace-mem=yes ls -l
+
+会运行可执行程序 “ls -l”，捕获其内存访问的跟踪，并按发生顺序将它们打印到标准输出上。
+
+Valgrind 内存跟踪的格式如下：
+I 0400d7d4,8
+  M 0421c7f0,4
+  L 04f6b868,8
+  S 7ff0005c8,8
+
+每行表示一个或两个内存访问。每行的格式为
+
+ [空格]操作 地址,大小
+
+操作字段表示内存访问的类型：
+ - “I” 表示指令加载
+ - “L” 表示数据加载
+ - “S” 表示数据存储
+ - “M” 表示数据修改（即数据加载后跟数据存储）。
+  
+每个 “I” 前面从不有空格。每个 “M”、“L” 和 “S” 前面总是有一个空格。
+地址字段指定了一个 64 位的十六进制内存地址。大小字段指定操作访问的字节数。
+
 ### 4.2 Part A: Writing a Cache Simulator
 
 In Part A you will write a cache simulator in csim.c that takes a valgrind memory trace as input, simulates the hit/miss behavior of a cache memory on this trace, and outputs the total number of hits, misses, and evictions.
@@ -90,7 +116,8 @@ Your job for Part A is to fill in the csim.c file so that it takes the same comm
 
 在第 A 部分，你将在 csim.c 中编写一个缓存模拟器，它接受 Valgrind 内存跟踪作为输入，模拟一个缓存在此跟踪上的命中/未命中行为，并输出总的命中次数、未命中次数和驱逐次数。
 
-我们为你提供了一个参考缓存模拟器的二进制可执行文件，名为 csim-ref，它能模拟在 Valgrind 跟踪文件上任意大小和关联性的缓存的行为。当选择要驱逐哪个缓存行时，它使用最近最少使用（LRU）替换策略。
+我们为你提供了一个参考缓存模拟器的二进制可执行文件，名为 csim-ref，它能模拟在 Valgrind 跟踪文件上任意大小和关联性的缓存的行为。
+当选择要驱逐哪个缓存行时，它使用最近最少使用（LRU）替换策略。
 
 参考模拟器接受以下命令行参数：
 
@@ -104,11 +131,14 @@ Your job for Part A is to fill in the csim.c file so that it takes the same comm
 
 命令行参数基于 CS:APP2e 教科书第 597 页的符号（s、E 和 b）。例如：
 
+~~~shell
 linux> ./csim-ref -s 4 -E 1 -b 4 -t traces/yi.trace
-命中：4 未命中：5 驱逐：3
+hits:4 misses:5 evictions:3
+~~~
 
 相同示例的详细模式：
 
+~~~shell
 linux> ./csim-ref -v -s 4 -E 1 -b 4 -t traces/yi.trace
 L 10,1 miss
 M 20,1 miss hit
@@ -118,8 +148,9 @@ L 110,1 miss eviction
 L 210,1 miss eviction
 M 12,1 miss eviction hit
 hits:4 misses:5 evictions:3
+~~~
 
-你在第 A 部分的任务是填写 csim.c 文件，使其接受相同的命令行参数并产生与参考模拟器相同的输出。注意，这个文件几乎是完全空的。你需要从头开始编写它。
+*你在第 A 部分的任务是填写 csim.c 文件，使其接受相同的命令行参数并产生与参考模拟器相同的输出。注意，这个文件几乎是完全空的。你需要从头开始编写它*
 
 ### Programming Rules for Part A
 - Include your name and loginID in the header comment for csim.c.
@@ -136,17 +167,11 @@ printSummary(hit_count, miss_count, eviction_count);
 - For this this lab, you should assume that memory accesses are aligned properly, such that a single memory access never crosses block boundaries. By making this assumption, you can ignore the request sizes in the valgrind traces.
 
 - 在 csim.c 的头部注释中包含你的姓名和登录 ID。
-  
 - 你的 csim.c 文件必须在编译时无警告，以获得学分。
-  
 - 你的模拟器必须能够正确处理任意的 s（组索引的位数）、E（每组中行的数量）和 b（块大小的位数）。这意味着你需要使用 malloc 函数为模拟器的数据结构分配存储空间。输入 “man malloc” 获取关于这个函数的信息。
-  
 - 在此实验中，我们只关注数据缓存性能，因此你的模拟器应忽略所有指令缓存访问（以 “I” 开头的行）。请记住，valgrind 始终在第一列（没有前导空格）放置 “I”，并在第二列（有前导空格）放置 “M”，“L” 和 “S”。这可以帮助你解析跟踪记录。
-  
 - 为了获得第 A 部分的学分，你必须在 main 函数的末尾调用函数 printSummary，并传入总的命中次数、未命中次数和驱逐次数：
-  
-  printSummary(hit_count, miss_count, eviction_count);
-
+  `printSummary(hit_count, miss_count, eviction_count)`;
 - 在此实验中，你应该假设内存访问是正确对齐的，因此单个内存访问永远不会跨越块边界。通过做出这个假设，你可以忽略 valgrind 跟踪中的请求大小。
 
 ### 4.3 Part B: Optimizing Matrix Transpose
@@ -229,6 +254,20 @@ For Part A, we will run your cache simulator using different cache parameters an
 You can use the reference simulator `csim-ref` to obtain the correct answer for each of these test cases. During debugging, use the -v option for a detailed record of each hit and miss. 
 
 For each test case, outputting the correct number of cache hits, misses and evictions will give you full credit for that test case. Each of your reported number of hits, misses and evictions is worth 1/3 of the credit for that test case. That is, if a particular test case is worth 3 points, and your simulator outputs the correct number of hits and misses, but reports the wrong number of evictions, then you will earn 2 points.
+
+对于第 A 部分，我们将使用不同的缓存参数和跟踪来运行你的缓存模拟器。共有八个测试用例，每个测试用例值 3 分，除了最后一个用例，它值 6 分：
+    linux> ./csim -s 1 -E 1 -b 1 -t traces/yi2.trace
+    linux> ./csim -s 4 -E 2 -b 4 -t traces/yi.trace
+    linux> ./csim -s 2 -E 1 -b 4 -t traces/dave.trace
+    linux> ./csim -s 2 -E 1 -b 3 -t traces/trans.trace
+    linux> ./csim -s 2 -E 2 -b 3 -t traces/trans.trace
+    linux> ./csim -s 2 -E 4 -b 3 -t traces/trans.trace
+    linux> ./csim -s 5 -E 1 -b 5 -t traces/trans.trace
+    linux> ./csim -s 5 -E 1 -b 5 -t traces/long.trace
+
+你可以使用参考模拟器 `csim-ref` 来获取每个测试用例的正确答案。在调试时，使用 -v 选项可以详细记录每次命中和未命中。
+
+对于每个测试用例，输出正确的缓存命中数、未命中数和驱逐数将使你获得该测试用例的全部分数。你报告的每个命中数、未命中数和驱逐数值 1/3 的该测试用例分数。也就是说，如果一个特定的测试用例值 3 分，而你的模拟器输出了正确的命中数和未命中数，但报告了错误的驱逐数，那么你将获得 2 分。
 
 ### 5.2 Evaluation for Part B
 For Part B, we will evaluate the correctness and performance of your transpose_submit function on three different-sized output matrices:
@@ -342,20 +381,20 @@ The autograder takes the matrix size as input. It uses valgrind to generate a tr
 For example, to test your registered transpose functions on a 32 × 32 matrix, rebuild test-trans, and then run it with the appropriate values for M and N :
 
 ~~~shell
-linux> make
-linux> ./test-trans -M 32 -N 32
-Step 1: Evaluating registered transpose funcs for correctness:
-func 0 (Transpose submission): correctness: 1
-func 1 (Simple row-wise scan transpose): correctness: 1
-func 2 (column-wise scan transpose): correctness: 1
-func 3 (using a zig-zag access pattern): correctness: 1
-Step 2: Generating memory traces for registered transpose funcs.
-Step 3: Evaluating performance of registered transpose funcs (s=5, E=1, b=5)
-func 0 (Transpose submission): hits:1766, misses:287, evictions:255
-func 1 (Simple row-wise scan transpose): hits:870, misses:1183, evictions:1151
-func 2 (column-wise scan transpose): hits:870, misses:1183, evictions:1151
-func 3 (using a zig-zag access pattern): hits:1076, misses:977, evictions:945
-Summary for official submission (func 0): correctness=1 misses=287
+  linux> make
+  linux> ./test-trans -M 32 -N 32
+  Step 1: Evaluating registered transpose funcs for correctness:
+  func 0 (Transpose submission): correctness: 1
+  func 1 (Simple row-wise scan transpose): correctness: 1
+  func 2 (column-wise scan transpose): correctness: 1
+  func 3 (using a zig-zag access pattern): correctness: 1
+  Step 2: Generating memory traces for registered transpose funcs.
+  Step 3: Evaluating performance of registered transpose funcs (s=5, E=1, b=5)
+  func 0 (Transpose submission): hits:1766, misses:287, evictions:255
+  func 1 (Simple row-wise scan transpose): hits:870, misses:1183, evictions:1151
+  func 2 (column-wise scan transpose): hits:870, misses:1183, evictions:1151
+  func 3 (using a zig-zag access pattern): hits:1076, misses:977, evictions:945
+  Summary for official submission (func 0): correctness=1 misses=287
 ~~~
 
 In this example, we have registered four different transpose functions in trans.c. The test-trans program tests each of the registered functions, displays the results for each, and extracts the results for the official submission.
