@@ -123,8 +123,8 @@ Your tsh shell should have the following features:
 7. tsh should support the following built-in commands:
    1. The `quit` command terminates the shell.
    2. The `jobs` command lists all background jobs.
-   3. The `bg <job>` command restarts <job> by sending it a SIGCONT signal, and then runs it in the background. The <job> argument can be either a PID or a JID.
-   4. The `fg <job>` command restarts <job> by sending it a SIGCONT signal, and then runs it in the foreground. The <job> argument can be either a PID or a JID.
+   3. The `bg <job>` command restarts <job> by sending it a `SIGCONT` signal, and then runs it in the background. The <job> argument can be either a PID or a JID.
+   4. The `fg <job>` command restarts <job> by sending it a `SIGCONT` signal, and then runs it in the foreground. The <job> argument can be either a PID or a JID.
 
 8. tsh should reap all of its zombie children. If any job terminates because it receives a signal that it didn’t catch, then tsh should recognize this event and print a message with the job’s PID and a description of the offending signal.
 
@@ -227,27 +227,6 @@ bass>
  - Programs such as more, less, vi, and emacs do strange things with the terminal settings. Don’t run these programs from your shell. Stick with simple text-based programs such as /bin/ls, /bin/ps, and /bin/echo
  - When you run your shell from the standard Unix shell, your shell is running in the foreground process group. If your shell then creates a child process, by default that child will also be a member of the foreground process group. Since typing ctrl-c sends a SIGINT to every process in the foreground group, typing ctrl-c will send a SIGINT to your shell, as well as to every process that your shell created, which obviously isn’t correct.
  - Here is the workaround: After the fork, but before the execve, the child process should call setpgid(0, 0), which puts the child in a new process group whose group ID is identical to the child’s PID. This ensures that there will be only one process, your shell, in the foreground process group. When you type ctrl-c, the shell should catch the resulting SIGINT and then forward it to the appropriate foreground job (or more precisely, the process group that contains the foreground job).
-
-Translation:
-
- - 仔细阅读教科书第8章（异常控制流）的每一个字。
-  
- - 使用追踪文件来指导你的shell开发。从trace01.txt开始，确保你的shell产生的输出与参考shell完全相同。然后继续处理追踪文件trace02.txt，依此类推。
-  
- - `waitpid`、`kill`、`fork`、`execve`、`setpgid`和`sigprocmask`函数将非常有用。`waitpid`的`WUNTRACED`和`WNOHANG`选项也将是有益的。
-  
- - 当你实现信号处理程序时，确保向整个前台进程组发送SIGINT和SIGTSTP信号，使用"-pid"而不是"pid"作为kill函数的参数。sdriver.pl程序会测试这个错误。
-  
- - 这项任务的难点之一是决定waitfg和sigchld处理程序功能之间的工作分配。我们推荐以下方法：
-   - 在waitfg中，使用围绕sleep函数的忙循环。
-   - 在sigchld处理程序中，确保只调用一次waitpid。
- 虽然其他解决方案也是可能的，比如在waitfg和sigchld处理程序中都调用waitpid，但这些可能会非常混乱。在处理程序中进行所有回收操作会更简单。
- 
- - 在eval中，父进程必须在fork子进程之前使用sigprocmask来阻塞SIGCHLD信号，然后在通过调用addjob将子进程添加到作业列表后，再次使用sigprocmask解除这些信号的阻塞。由于子进程继承了它们父进程的阻塞向量，子进程必须确保在exec新程序之前解除对SIGCHLD信号的阻塞。父进程需要以这种方式阻塞SIGCHLD信号，以避免发生竞争条件，即在父进程调用addjob之前，子进程已经被sigchld处理程序回收（并因此从作业列表中移除）。 
-  
- - 像more、less、vi和emacs这样的程序会对终端设置做一些奇怪的事情。不要从你的shell中运行这些程序。坚持使用简单的基于文本的程序，如/bin/ls、/bin/ps和/bin/echo。
-  
- - 当你从标准Unix shell运行你的shell时，你的shell运行在前台进程组中。如果你的shell创建了一个子进程，那么默认情况下，该子进程也将是前台进程组的成员。由于输入ctrl-c会向前台组的每个进程发送SIGINT，因此输入ctrl-c将向你的shell以及你的shell创建的每个进程发送SIGINT，这显然是不正确的。这里是解决办法：在fork之后，但在execve之前，子进程应该调用setpgid(0, 0)，这将把子进程放在一个新的进程组中，其组ID与子进程的PID相同。这确保只有一个进程，即你的shell，在前台进程组中。当你输入ctrl-c时，shell应该捕获结果SIGINT，然后将其转发给适当的前台作业（或更准确地说，包含前台作业的进程组）。
 
 # Evaluation
 Your score will be computed out of a maximum of 90 points based on the following distribution:
