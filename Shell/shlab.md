@@ -258,4 +258,3 @@ Your score will be computed out of a maximum of 90 points based on the following
 Your solution shell will be tested for correctness on a Linux machine, using the same shell driver and trace files that were included in your lab directory. Your shell should produce identical output on these traces as the reference shell, with only two exceptions:
  • The PIDs can (and will) be different.
  • The output of the /bin/ps commands in trace11.txt, trace12.txt, and trace13.txt will be different from run to run. However, the running states of any mysplit processes in the output of the /bin/ps command should be identical.
-
