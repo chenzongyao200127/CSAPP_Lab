@@ -7,7 +7,7 @@ TODO:
 4. Architechture Lab
 5. ~~Cache Lab - 实现一个缓存系统来加速计算~~
 6. Performance Lab
-7. Shell Lab - 实现一个 shell
+7. ~~Shell Lab - 实现一个 shell~~
 8. ~~Malloc Lab - 实现一个动态内存分配器~~
 9. Proxy Lab - 实现一个多线程带缓存的代理服务器
 
