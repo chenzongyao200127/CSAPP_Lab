@@ -178,10 +178,9 @@ void eval(char *cmdline)
     sigset_t mask, prev;
 
     strcpy(buf, cmdline);
-    if (!(bg = parseline(buf, argv)))
+    if (!(bg = parseline(buf, argv))) // Check if it's a background job and if command is not empty
         return;
-
-    if (builtin_cmd(argv))
+    if (builtin_cmd(argv)) // Directly execute built-in command
         return;
 
     // Simplify signal set initialization and block SIGCHLD
@@ -198,14 +197,11 @@ void eval(char *cmdline)
         perror("fork error");
         return;
     }
-
     if (pid == 0)
     { // Child process
         setpgid(0, 0);
         if (sigprocmask(SIG_SETMASK, &prev, NULL) < 0)
-        {
             perror("sigprocmask error");
-        }
         if (execve(argv[0], argv, environ) < 0)
         {
             printf("%s: Command not found\n", argv[0]);
@@ -216,19 +212,11 @@ void eval(char *cmdline)
     // Parent process
     sigset_t mask_all;
     sigfillset(&mask_all);
-
     if (sigprocmask(SIG_BLOCK, &mask_all, NULL) < 0)
-    {
         perror("sigprocmask error");
-    }
-
     addjob(jobs, pid, (bg ? BG : FG), cmdline);
-
     if (sigprocmask(SIG_SETMASK, &prev, NULL) < 0)
-    {
         perror("sigprocmask error");
-    }
-
     if (bg)
         printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
     else
@@ -415,11 +403,8 @@ void waitfg(pid_t pid)
     sigfillset(&mask_all);
     sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
 
-    while (fgpid(jobs) == pid)
-    {
-        // Busy loop with sleep to reduce CPU usage
-        sleep(1);
-    }
+    while (fgpid(jobs) > 0)
+        sigsuspend(&prev_all);
 
     sigprocmask(SIG_SETMASK, &prev_all, NULL);
     return;
