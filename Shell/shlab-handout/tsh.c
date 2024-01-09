@@ -171,66 +171,68 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline)
 {
-    char *argv[MAXARGS]; /* Argument list for execve() */
-    char buf[MAXLINE];   /* Buffer to hold the modified command line */
-    int bg;              /* Flag to determine if the job should run in background or foreground */
-    pid_t pid;           /* Process ID */
-    int state;
+    char buf[MAXLINE];
+    char *argv[MAXARGS];
+    int bg;
+    pid_t pid;
+    sigset_t mask, prev;
 
     strcpy(buf, cmdline);
-    bg = parseline(buf, argv);
-    state = bg ? BG : FG;
-    if (argv[0] == NULL)
+    if (!(bg = parseline(buf, argv)))
         return;
 
-    if (!builtin_cmd(argv))
+    if (builtin_cmd(argv))
+        return;
+
+    // Simplify signal set initialization and block SIGCHLD
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    if (sigprocmask(SIG_BLOCK, &mask, &prev) < 0)
     {
-        sigset_t mask_one, prev_one;
-        sigemptyset(&mask_one);
-        sigaddset(&mask_one, SIGCHLD);
+        perror("sigprocmask error");
+        return;
+    }
 
-        /* Block SIGCHLD signals temporarily */
-        sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
-        if ((pid = fork()) == 0)
+    if ((pid = fork()) < 0)
+    {
+        perror("fork error");
+        return;
+    }
+
+    if (pid == 0)
+    { // Child process
+        setpgid(0, 0);
+        if (sigprocmask(SIG_SETMASK, &prev, NULL) < 0)
         {
-            /* Child process */
-            sigprocmask(SIG_SETMASK, &prev_one, NULL);
-
-            /* Set process group ID to its own PID, detaching from parent's group */
-            setpgid(0, 0);
-
-            if (execve(argv[0], argv, environ) < 0)
-            {
-                printf("%s: Command not found.\n", argv[0]);
-            }
-
+            perror("sigprocmask error");
+        }
+        if (execve(argv[0], argv, environ) < 0)
+        {
+            printf("%s: Command not found\n", argv[0]);
             exit(0);
         }
-
-        // Block all signals temporarily while saving job info
-        sigset_t mask_all, prev_all;
-        sigfillset(&mask_all);
-        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
-
-        if (!addjob(jobs, pid, state, cmdline))
-        {
-            return;
-        };
-        int new_jid = pid2jid(pid);                // Convert PID to job ID
-        sigprocmask(SIG_SETMASK, &prev_all, NULL); // Restore previous signal mask
-
-        if (!bg)
-        {
-            waitfg(pid);
-        }
-        else
-        {
-            printf("[%d] %d %s \t %s\n", new_jid, pid, "Running", cmdline);
-        }
-
-        /* Unblock SIGCHLD signals */
-        sigprocmask(SIG_SETMASK, &prev_one, NULL);
     }
+
+    // Parent process
+    sigset_t mask_all;
+    sigfillset(&mask_all);
+
+    if (sigprocmask(SIG_BLOCK, &mask_all, NULL) < 0)
+    {
+        perror("sigprocmask error");
+    }
+
+    addjob(jobs, pid, (bg ? BG : FG), cmdline);
+
+    if (sigprocmask(SIG_SETMASK, &prev, NULL) < 0)
+    {
+        perror("sigprocmask error");
+    }
+
+    if (bg)
+        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
+    else
+        waitfg(pid);
     return;
 }
 
@@ -420,6 +422,7 @@ void waitfg(pid_t pid)
     }
 
     sigprocmask(SIG_SETMASK, &prev_all, NULL);
+    return;
 }
 
 /*****************
