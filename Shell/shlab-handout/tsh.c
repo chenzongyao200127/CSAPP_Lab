@@ -171,16 +171,85 @@ int main(int argc, char **argv)
  */
 void eval(char *cmdline)
 {
+    char *argv[MAXARGS]; /* Argument list for execve() */
+    char buf[MAXLINE];   /* Buffer to hold the modified command line */
+    int bg;              /* Flag to determine if the job should run in background or foreground */
+    pid_t pid;           /* Process ID */
+
+    strcpy(buf, cmdline);
+    bg = parseline(buf, argv);
+    if (argv[0] == NULL)
+        return;
+
+    if (!builtin_cmd(argv))
+    {
+        sigset_t mask_one, prev_one;
+        sigemptyset(&mask_one);
+        sigaddset(&mask_one, SIGCHLD);
+
+        /* Block SIGCHLD signals temporarily */
+        sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
+        if ((pid = fork()) == 0)
+        {
+            /* Child process */
+            sigprocmask(SIG_SETMASK, &prev_one, NULL);
+
+            /* Set process group ID to its own PID, detaching from parent's group */
+            setpgid(0, 0);
+
+            if (execve(argv[0], argv, environ) < 0)
+            {
+                printf("%s: Command not found.\n", argv[0]);
+            }
+        }
+
+        sigset_t mask_all, prev_all;
+        sigfillset(&mask_all);
+        // Block all signals temporarily while saving job info
+        sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+        if (!addjob(jobs, pid, !bg, cmdline))
+        {
+            return;
+        };
+        int new_jid = pid2jid(pid);                // Convert PID to job ID
+        sigprocmask(SIG_SETMASK, &prev_all, NULL); // Restore previous signal mask
+
+        if (!bg)
+        {
+            sigset_t mask, oldmask;
+
+            // Initialize the signal set and add SIGCHLD to it
+            sigemptyset(&mask);
+            sigaddset(&mask, SIGCHLD);
+
+            // Block SIGCHLD and save current signal mask
+            sigprocmask(SIG_BLOCK, &mask, &oldmask);
+
+            // Iterate over jobs array to find the job with the given pid
+            for (int i = 0; i < MAXJOBS; i++)
+            {
+                if (jobs[i].pid == pid)
+                {
+                    // Update job state to foreground
+                    jobs[i].state = FG;
+                    break;
+                }
+            }
+
+            // Restore the previous signal mask
+            sigprocmask(SIG_SETMASK, &oldmask, NULL);
+
+            waitfg(pid);
+        }
+        else
+            printf("[%d] %d %s \t %s\n", new_jid, pid, "Running", cmdline); // Print background job info
+
+        /* Unblock SIGCHLD signals */
+        sigprocmask(SIG_SETMASK, &prev_one, NULL);
+    }
     return;
 }
 
-/*
- * parseline - Parse the command line and build the argv array.
- *
- * Characters enclosed in single quotes are treated as a single
- * argument.  Return true if the user has requested a BG job, false if
- * the user has requested a FG job.
- */
 /*
  * parseline - Parse the command line and build the argv array.
  *
@@ -251,7 +320,22 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv)
 {
-    return 0; /* not a builtin command */
+    if (!strcmp(argv[0], "quit")) /* quit command */
+        exit(0);
+    if (!strcmp(argv[0], "&")) /* Ignore singleton & */
+        return 1;
+    if (!strcmp(argv[0], "jobs"))
+    {
+        listjobs(jobs);
+        return 1;
+    }
+    // fg or bg
+    if (!strcmp(argv[0], "fg") || !strcmp(argv[0], "bg"))
+    {
+        do_bgfg(argv);
+        return 1;
+    }
+    return 0; /* Not a builtin command */
 }
 
 /*
@@ -259,15 +343,90 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv)
 {
-    return;
+    // Check for proper command format
+    if (!argv[1] || argv[2] != NULL)
+    {
+        printf("Usage: %s <jobid> or %s <pid>\n", argv[0], argv[0]);
+        return;
+    }
+
+    // Determine whether the input is a job id or a process id
+    int id;
+    if (argv[1][0] == '%')
+    {
+        id = atoi(argv[1] + 1); // Extract integer part after '%'
+    }
+    else
+    {
+        id = atoi(argv[1]); // Convert string to integer
+    }
+
+    pid_t pid = id;
+    if (argv[1][0] == '%')
+    {
+        struct job_t *jp = getjobjid(jobs, id);
+        if (jp == NULL)
+        {
+            app_error("No such job\n");
+            return; // Job ID not found
+        }
+        pid = jp->pid;
+    }
+
+    // Common signal blocking
+    sigset_t mask_one, prev_one;
+    sigemptyset(&mask_one);
+    sigaddset(&mask_one, SIGCHLD);
+    sigprocmask(SIG_BLOCK, &mask_one, &prev_one);
+
+    // Send continue signal to the process
+    if (kill(pid, SIGCONT) == -1)
+    {
+        unix_error("kill failed");
+        sigprocmask(SIG_SETMASK, &prev_one, NULL);
+        exit(0);
+    }
+
+    // Specific action for 'fg' command
+    if (!strcmp(argv[0], "fg"))
+    {
+        waitfg(pid);
+    }
+
+    sigprocmask(SIG_SETMASK, &prev_one, NULL);
 }
 
 /*
  * waitfg - Block until process pid is no longer the foreground process
+ *
+ * One of the tricky parts of the assignment is deciding on the allocation of work between the waitfg and sigchld handler functions.
+ * We recommend the following approach:
+ * In waitfg, use a busy loop around the sleep function.
  */
 void waitfg(pid_t pid)
 {
-    return;
+    while (1)
+    {
+        int is_fg = 0;
+
+        // Iterate through the jobs list to check if the pid is still a foreground job
+        for (int i = 0; i < MAXJOBS; i++)
+        {
+            if (jobs[i].pid == pid && jobs[i].state == FG)
+            {
+                is_fg = 1; // The process is still in the foreground
+                break;
+            }
+        }
+
+        if (!is_fg)
+        {
+            break; // Exit the loop if the process is no longer in the foreground
+        }
+
+        // Use sleep to pause the busy loop, making it less CPU-intensive
+        sleep(1); // Sleep for 1 second
+    }
 }
 
 /*****************
@@ -283,7 +442,45 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig)
 {
-    return;
+    int status;
+    pid_t pid;
+
+    int olderrno = errno;
+    while (1)
+    {
+        // Use waitpid to check for any child process that has terminated
+        // WNOHANG returns immediately if no child has exited
+        // WUNTRACED reports the status of stopped children as well as terminated ones
+        pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+
+        if (pid > 0)
+        {
+            // Loop through jobs to find and update/remove the corresponding job
+            for (int i = 0; i < MAXJOBS; i++)
+            {
+                if (jobs[i].pid == pid)
+                {
+                    if (WIFEXITED(status) || WIFSIGNALED(status))
+                    {
+                        // If the child terminated normally or was killed, remove the job
+                        deletejob(jobs, pid)
+                    }
+                    else if (WIFSTOPPED(status))
+                    {
+                        // If the child was stopped, update the job state
+                        jobs[i].state = ST;
+                    }
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // Break out of the loop if no more child processes have changed state
+            break;
+        }
+    }
+    errno = olderrno;
 }
 
 /*
@@ -293,7 +490,20 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig)
 {
-    return;
+    int olderrno = errno;
+    for (int i = 0; i < MAXJOBS; i++)
+    {
+        if (jobs[i].state == FG)
+        {
+            // Send SIGINT to the foreground job
+            if (kill(-jobs[i].pid, SIGINT) < 0)
+            {
+                unix_error("kill (SIGINT)");
+            }
+            break;
+        }
+    }
+    errno = olderrno;
 }
 
 /*
@@ -303,7 +513,25 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig)
 {
-    return;
+    int olderrno = errno;
+    for (int i = 0; i < MAXJOBS; i++)
+    {
+        if (jobs[i].state == FG)
+        {
+            // Send SIGTSTP to the foreground job
+            if (kill(-jobs[i].pid, SIGTSTP) < 0)
+            {
+                perror("kill (SIGTSTP)");
+            }
+            else
+            {
+                // Update job state to stopped
+                jobs[i].state = ST;
+            }
+            break;
+        }
+    }
+    errno = olderrno;
 }
 
 /*********************
