@@ -28,7 +28,10 @@ This will generate a handout directory called proxylab-handout. The README file 
 
 The first step is implementing a basic sequential proxy that handles HTTP/1.0 GET requests. Other requests type, such as POST, are strictly optional.
 
-When started, your proxy should listen for incoming connections on a port whose number will be specified on the command line. Once a connection is established, your proxy should read the entirety of the request from the client and parse the request. It should determine whether the client has sent a valid HTTP request; if so, it can then establish its own connection to the appropriate web server then request the object the client specified. Finally, your proxy should read the server’s response and forward it to the client.
+
+When started, your proxy should listen for incoming connections on a port whose number will be specified on the command line. Once a connection is established, your proxy should read the entirety of the request from the client and parse the request. 
+
+It should determine whether the client has sent a valid HTTP request; if so, it can then establish its own connection to the appropriate web server then request the object the client specified. Finally, your proxy should read the server’s response and forward it to the client.
 
 ## 4.1 HTTP/1.0 GET requests
 
@@ -36,8 +39,7 @@ When an end user enters a URL such as http://www.cmu.edu/hub/index.html into the
 
 `GET http://www.cmu.edu/hub/index.html HTTP/1.1`
 
-In that case, the proxy should parse the request into at least the following fields: the hostname, www.cmu.edu; and the path or query and everything following it, /hub/index.html. That way, the proxy can determine that it should open a connection to www.cmu.edu and send an HTTP request of its own starting with
-a line of the following form:
+In that case, the proxy should parse the request into at least the following fields: the hostname, www.cmu.edu; and the path or query and everything following it, /hub/index.html. That way, the proxy can determine that it should open a connection to www.cmu.edu and send an HTTP request of its own starting with a line of the following form:
 
 `GET /hub/index.html HTTP/1.0`
 
@@ -45,7 +47,9 @@ Note that all lines in an HTTP request end with a carriage return, ‘`\r`’, f
 
 You should notice in the above example that the web browser’s request line ends with HTTP/1.1, while the proxy’s request line ends with HTTP/1.0. Modern web browsers will generate HTTP/1.1 requests, but your proxy should handle them and forward them as HTTP/1.0 requests.
 
-It is important to consider that HTTP requests, even just the subset of HTTP/1.0 GET requests, can be incredibly complicated. The textbook describes certain details of HTTP transactions, but you should refer to RFC 1945 for the complete HTTP/1.0 specification. Ideally your HTTP request parser will be fully robust according to the relevant sections of RFC 1945, except for one detail: while the specification allows for multiline request fields, your proxy is not required to properly handle them. Of course, your proxy should never prematurely abort due to a malformed request.
+It is important to consider that HTTP requests, even just the subset of HTTP/1.0 GET requests, can be incredibly complicated. The textbook describes certain details of HTTP transactions, but you should refer to RFC 1945 for the complete HTTP/1.0 specification. 
+
+Ideally your HTTP request parser will be fully robust according to the relevant sections of RFC 1945, except for one detail: while the specification allows for multiline request fields, your proxy is not required to properly handle them. Of course, your proxy should never prematurely abort due to a malformed request.
 
 ## 4.2 Request headers
 
@@ -99,8 +103,7 @@ textbook.
   
 # Part III: Caching web objects
 
-For the final part of the lab, you will add a cache to your proxy that stores recently-used Web objects in memory. HTTP actually defines a fairly complex model by which web servers can give instructions as to how the objects they serve should be cached and clients can specify how caches should be used on their
-behalf. However, your proxy will adopt a simplified approach.
+For the final part of the lab, you will add a cache to your proxy that stores recently-used Web objects in memory. HTTP actually defines a fairly complex model by which web servers can give instructions as to how the objects they serve should be cached and clients can specify how caches should be used on their behalf. However, your proxy will adopt a simplified approach.
 
 When your proxy receives a web object from a server, it should cache it in memory as it transmits the object to the client. If another client requests the same object from the same server, your proxy need not reconnect to the server; it can simply resend the cached object.
 
@@ -147,3 +150,99 @@ This assignment will be graded out of a total of 70 points:
 
 ## 7.1 Autograding
 
+Your handout materials include an autograder, called driver.sh, that your instructor will use to assign scores for BasicCorrectness, Concurrency, and Cache. From the proxylab-handout directory:
+
+~~~shell
+linux> ./driver.sh
+~~~
+
+You must run the driver on a Linux machine.
+
+## 7.2 Robustness
+As always, you must deliver a program that is robust to errors and even malformed or malicious input. Servers are typically long-running processes, and web proxies are no exception. Think carefully about how long-running processes should react to different types of errors. For many kinds of errors, it is certainly inappropriate for your proxy to immediately exit.
+
+Robustness implies other requirements as well, including invulnerability to error cases like segmentation faults and a lack of memory leaks and file descriptor leaks
+
+# 8 Testing and debugging
+
+Besides the simple autograder, you will not have any sample inputs or a test program to test your implementation. You will have to come up with your own tests and perhaps even your own testing harness to help you debug your code and decide when you have a correct implementation. This is a valuable skill in the real world, where exact operating conditions are rarely known and reference solutions are often unavailable.
+
+Fortunately there are many tools you can use to debug and test your proxy. Be sure to exercise all code paths and test a representative set of inputs, including base cases, typical cases, and edge cases
+
+## 8.1 Tiny web server
+
+Your handout directory the source code for the CS:APP Tiny web server. While not as powerful as thttpd, the CS:APP Tiny web server will be easy for you to modify as you see fit. It’s also a reasonable starting point for your proxy code. And it’s the server that the driver code uses to fetch pages.
+
+## 8.2 telnet
+
+As described in your textbook (11.5.3), you can use telnet to open a connection to your proxy and send it HTTP requests
+
+## 8.3 curl
+
+You can use curl to generate HTTP requests to any server, including your own proxy. It is an extremely useful debugging tool. For example, if your proxy and Tiny are both running on the local machine, Tiny is listening on port 15213, and proxy is listening on port 15214, then you can request a page from Tiny via your proxy using the following curl command:
+
+~~~shell
+linux> curl -v --proxy http://localhost:15214 http://localhost:15213/home.html
+* About to connect() to proxy localhost port 15214 (#0)
+* Trying 127.0.0.1... connected
+* Connected to localhost (127.0.0.1) port 15214 (#0)
+> GET http://localhost:15213/home.html HTTP/1.1
+> User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu)...
+> Host: localhost:15213
+> Accept: */*
+> Proxy-Connection: Keep-Alive
+>
+* HTTP 1.0, assume close after body
+< HTTP/1.0 200 OK
+< Server: Tiny Web Server
+< Content-length: 120
+< Content-type: text/html
+<
+<html>
+<head><title>test</title></head>
+<body>
+<img align="middle" src="godzilla.gif">
+Dave O’Hallaron
+</body>
+</html>
+* Closing connection #0
+~~~
+
+## 8.4 netcat
+
+netcat, also known as nc, is a versatile network utility. You can use netcat just like telnet, to open connections to servers. Hence, imagining that your proxy were running on catshark using port 12345 you can do something like the following to manually test your proxy:
+
+~~~shell
+sh> nc catshark.ics.cs.cmu.edu 12345
+GET http://www.cmu.edu/hub/index.html HTTP/1.0
+HTTP/1.1 200 OK
+...
+~~~
+
+In addition to being able to connect to Web servers, netcat can also operate as a server itself. With the following command, you can run netcat as a server listening on port 12345:
+
+~~~shell
+sh> nc -l 12345
+~~~
+
+Once you have set up a netcat server, you can generate a request to a phony object on it through your proxy, and you will be able to inspect the exact request that your proxy sent to netcat.
+
+## 8.5 Web browsers
+Eventually you should test your proxy using the most recent version of Mozilla Firefox. Visiting About Firefox will automatically update your browser to the most recent version.
+
+To configure Firefox to work with a proxy, visit
+
+`Preferences>Advanced>Network>Settings`
+
+It will be very exciting to see your proxy working through a real Web browser. Although the functionality of your proxy will be limited, you will notice that you are able to browse the vast majority of websites through your proxy.
+
+An important caveat is that you must be very careful when testing caching using a Web browser. All modern Web browsers have caches of their own, which you should disable before attempting to test your proxy’s cache.
+
+# Hints
+  - As discussed in Section 10.11 of your textbook, using standard I/O functions for socket input and output is a problem. Instead, we recommend that you use the Robust I/O (RIO) package, which is provided in the csapp.c file in the handout directory.
+  - The error-handling functions provide in csapp.c are not appropriate for your proxy because once a server begins accepting connections, it is not supposed to terminate. You’ll need to modify them or write your own.
+  - You are free to modify the files in the handout directory any way you like. For example, for the sake of good modularity, you might implement your cache functions as a library in files called cache.c and cache.h. Of course, adding new files will require you to update the provided Makefile.
+  - As discussed in the Aside on page 964 of the CS:APP3e text, your proxy must ignore SIGPIPE signals and should deal gracefully with write operations that return EPIPE errors.
+  - Sometimes, calling read to receive bytes from a socket that has been prematurely closed will cause read to return -1 with errno set to ECONNRESET. Your proxy should not terminate due to this error either.
+  - Remember that not all content on the web is ASCII text. Much of the content on the web is binary data, such as images and video. Ensure that you account for binary data when selecting and using functions for network I/O.
+  - Forward all requests as HTTP/1.0 even if the original request was HTTP/1.1
