@@ -35,6 +35,6 @@ int main(void)
     printf("%s", content);
     fflush(stdout);
 
-exit(0);
+    exit(0);
 }
 /* $end adder */

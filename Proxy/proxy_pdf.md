@@ -96,11 +96,10 @@ Please don’t pick your own random port. If you do, you run the risk of interfe
 
 # 5 Part II: Dealing with multiple concurrent requests
 
-Once you have a working sequential proxy, you should alter it to simultaneously handle multiple requests. The simplest way to implement a concurrent server is to spawn a new thread to handle each new connection request. Other designs are also possible, such as the prethreaded server described in Section 12.5.5 of your
-textbook. 
+Once you have a working sequential proxy, you should alter it to simultaneously handle multiple requests. The simplest way to implement a concurrent server is to spawn a new thread to handle each new connection request. Other designs are also possible, such as the prethreaded server described in Section 12.5.5 of your textbook. 
  - Note that your threads should run in detached mode to avoid memory leaks.
- - The open clientfd and open listenfd functions described in the CS:APP3e textbook are based on the modern and protocol-independent getaddrinfo function, and thus are thread safe
-  
+ - The `open_clientfd` and `open_listenfd` functions described in the CS:APP3e textbook are based on the modern and protocol-independent getaddrinfo function, and thus are thread safe.
+
 # Part III: Caching web objects
 
 For the final part of the lab, you will add a cache to your proxy that stores recently-used Web objects in memory. HTTP actually defines a fairly complex model by which web servers can give instructions as to how the objects they serve should be cached and clients can specify how caches should be used on their behalf. However, your proxy will adopt a simplified approach.
