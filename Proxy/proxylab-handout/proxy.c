@@ -7,19 +7,17 @@
 
 Cache cache;
 
-/* You won't lose style points for including this long line in your code */
-static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
-
 /* Function to parse command line arguments */
 void parseArgs(int argc, char *argv[]);
 void *handleRequest(void *vargp);
 void parseRequestLine(int connfd, char *method, char *uri, char *version);
 void parseURI(const char *uri, char *hostname, char *path, int *port);
-void buildRequestHeaders(const char *hostname, char *headers, int connfd);
 void forwardResponseToClient(int connfd, const char *content, size_t size);
 int forwardRequestToServer(const char *hostname, int port, const char *headers, const char *path, const char *method, const char *version);
 CacheItem *checkCache(Cache *cache, const char *uri);
 void storeResponseInCache(Cache *cache, const char *uri, const char *content, size_t size);
+void buildRequestHeaders(const char *hostname, int port, char *headers, int connfd);
+int receiveResponseFromServer(int serverfd, char *response, int maxSize);
 
 int main(int argc, char *argv[])
 {
@@ -139,25 +137,46 @@ void parseURI(const char *uri, char *hostname, char *path, int *port)
     }
 }
 
-void buildRequestHeaders(const char *hostname, char *headers, int connfd)
+void buildRequestHeaders(const char *hostname, int port, char *headers, int connfd)
 {
     char buf[MAXLINE];
     rio_t rio;
 
-    // 添加Host头部
-    sprintf(headers, "Host: %s\r\n", hostname);
-
-    // 添加其他固定头部
+    // 构建请求头
+    // 如果端口不是80，则在Host头部中包含端口号
+    if (port == 80)
+    {
+        sprintf(headers, "Host: %s\r\n", hostname);
+    }
+    else
+    {
+        sprintf(headers, "Host: %s:%d\r\n", hostname, port);
+    }
     strcat(headers, "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n");
     strcat(headers, "Connection: close\r\n");
     strcat(headers, "Proxy-Connection: close\r\n");
 
-    // 转发客户端的其他头部
+    // 转发客户端的其他头部，但要避免头部重复
     while (Rio_readlineb(&rio, buf, MAXLINE) > 0)
     {
         if (strcmp(buf, "\r\n") == 0)
+        {
             break; // 头部结束
+        }
+        if (strncasecmp(buf, "Host:", 5) == 0 ||
+            strncasecmp(buf, "User-Agent:", 11) == 0 ||
+            strncasecmp(buf, "Connection:", 11) == 0 ||
+            strncasecmp(buf, "Proxy-Connection:", 17) == 0)
+        {
+            continue; // 跳过这些头部
+        }
         strcat(headers, buf);
+
+        // Debug: 打印每行内容
+        if (DEBUG)
+        {
+            printf("Debug: Read header line: %s", buf);
+        }
     }
 }
 
@@ -169,19 +188,38 @@ int forwardRequestToServer(const char *hostname, int port, const char *headers, 
     // 将端口号转换为字符串
     sprintf(portStr, "%d", port);
 
+    if (DEBUG)
+    {
+        printf("Debug: Connecting to server %s on port %s\n", hostname, portStr);
+    }
+
     // 连接到服务器
     serverfd = Open_clientfd(hostname, portStr);
     if (serverfd < 0)
     {
         fprintf(stderr, "Unable to connect to server.\n");
+        if (DEBUG)
+        {
+            fprintf(stderr, "Debug: Failed to connect to server %s on port %s\n", hostname, portStr);
+        }
         return -1;
     }
 
-    // 发送请求
+    if (DEBUG)
+    {
+        printf("Debug: Connected to server, sending request...\n");
+    }
+
+    // 构建并发送请求
     char request[MAXLINE];
     sprintf(request, "%s %s %s\r\n", method, path, version);
     Rio_writen(serverfd, request, strlen(request));
     Rio_writen(serverfd, headers, strlen(headers));
+
+    if (DEBUG)
+    {
+        printf("Debug: Request sent to server:\n%s%s\n", request, headers);
+    }
 
     return serverfd;
 }
@@ -191,9 +229,13 @@ int receiveResponseFromServer(int serverfd, char *response, int maxSize)
     int n;
     int totalSize = 0;
     char buf[MAXLINE];
+    rio_t rio;
+
+    // 初始化 Robust I/O 结构体
+    Rio_readinitb(&rio, serverfd);
 
     // 读取服务器的响应
-    while ((n = Rio_readn(serverfd, buf, MAXLINE)) > 0)
+    while ((n = Rio_readnb(&rio, buf, MAXLINE)) > 0)
     {
         if (totalSize + n <= maxSize)
         {
@@ -202,9 +244,28 @@ int receiveResponseFromServer(int serverfd, char *response, int maxSize)
         }
         else
         {
+            if (DEBUG)
+            {
+                printf("Debug: Response is too large to store completely. Truncating.\n");
+            }
             break; // 响应太大，不完全存储
         }
+
+        if (DEBUG)
+        {
+            printf("Debug: Received %d bytes from server, total received: %d bytes\n", n, totalSize);
+        }
     }
+
+    if (n < 0)
+    {
+        if (DEBUG)
+        {
+            printf("Debug: Error occurred while reading from server.\n");
+        }
+        return -1; // 读取错误
+    }
+
     return totalSize; // 返回响应的大小
 }
 
@@ -240,9 +301,24 @@ void *handleRequest(void *vargp)
     {
         if (DEBUG)
             printf("Debug: Cache miss for %s\n", uri);
+
         // 缓存未命中，解析 URI 并构建请求头
         parseURI(uri, hostname, path, &port);
-        buildRequestHeaders(hostname, headers, connfd);
+
+        if (DEBUG)
+        {
+            printf("Debug: Parsed URI:\n");
+            printf("  Hostname: %s\n", hostname);
+            printf("  Path: %s\n", path);
+            printf("  Port: %d\n", port);
+        }
+
+        buildRequestHeaders(hostname, port, headers, connfd);
+
+        if (DEBUG)
+        {
+            printf("Debug: Constructed request headers:\n%s\n", headers);
+        }
 
         // 转发请求到服务器
         serverfd = forwardRequestToServer(hostname, port, headers, path, method, version);
