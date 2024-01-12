@@ -7,17 +7,18 @@
 
 Cache cache;
 
+struct Uri
+{
+    char host[100];
+    char port[6];
+    char path[100];
+};
+
 /* Function to parse command line arguments */
 void parseArgs(int argc, char *argv[]);
 void *handleRequest(void *vargp);
-void parseRequestLine(int connfd, char *method, char *uri, char *version);
-void parseURI(const char *uri, char *hostname, char *path, int *port);
-void forwardResponseToClient(int connfd, const char *content, size_t size);
-int forwardRequestToServer(const char *hostname, int port, const char *headers, const char *path, const char *method, const char *version);
-CacheItem *checkCache(Cache *cache, const char *uri);
-void storeResponseInCache(Cache *cache, const char *uri, const char *content, size_t size);
-void buildRequestHeaders(const char *hostname, int port, char *headers, int connfd);
-int receiveResponseFromServer(int serverfd, char *response, int maxSize);
+void parse_uri(char *uri, struct Uri *uri_data);
+void build_header(char *http_header, struct Uri *uri_data, rio_t *client_rio);
 
 int main(int argc, char *argv[])
 {
@@ -75,280 +76,167 @@ void parseArgs(int argc, char *argv[])
     }
 }
 
-void parseRequestLine(int connfd, char *method, char *uri, char *version)
+// 解析uri
+void parse_uri(char *uri, struct Uri *uri_data)
 {
-    char buf[MAXLINE];
-    rio_t rio;
+    // Initialize default values
+    strcpy(uri_data->port, "80");
+    uri_data->path[0] = '\0';
 
-    // 初始化 Robust I/O 结构体
-    Rio_readinitb(&rio, connfd);
-
-    // 读取一行数据（请求行）
-    if (Rio_readlineb(&rio, buf, MAXLINE) <= 0)
+    // Find the position of "//" to identify the host
+    char *host_start = strstr(uri, "//");
+    if (host_start == NULL)
     {
-        fprintf(stderr, "Error reading request line from client.\n");
+        // If no host specified, the entire URI is a path
+        strcpy(uri_data->path, uri);
         return;
     }
 
-    // 解析方法、URI和版本
-    sscanf(buf, "%s %s %s", method, uri, version);
+    // Move past the "//"
+    host_start += 2;
+
+    // Find the next "/" to isolate the host and path
+    char *path_start = strchr(host_start, '/');
+    if (path_start != NULL)
+    {
+        strcpy(uri_data->path, path_start);
+        *path_start = '\0'; // Terminate the host string
+    }
+
+    // Find the port, if specified
+    char *port_start = strchr(host_start, ':');
+    if (port_start != NULL)
+    {
+        sscanf(port_start + 1, "%5s", uri_data->port); // Read port (max 5 digits)
+        *port_start = '\0';                            // Terminate the host string
+    }
+
+    // Copy the host into the uri_data
+    strcpy(uri_data->host, host_start);
 }
 
-void forwardResponseToClient(int connfd, const char *content, size_t size)
+void build_header(char *http_header, struct Uri *uri_data, rio_t *client_rio)
 {
-    Rio_writen(connfd, content, size);
-}
+    // Standard headers
+    char *User_Agent = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
+    char *conn_hdr = "Connection: close\r\n";
+    char *prox_hdr = "Proxy-Connection: close\r\n";
+    char *host_hdr_format = "Host: %s\r\n";
+    char *requestlint_hdr_format = "GET %s HTTP/1.0\r\n";
+    char *endof_hdr = "\r\n";
 
-void parseURI(const char *uri, char *hostname, char *path, int *port)
-{
-    // 解析URI，假设URI的格式为 http://hostname[:port]/path
-    char *pos = strstr(uri, "://");
-    if (pos == NULL)
-    {
-        pos = uri;
-    }
-    else
-    {
-        pos += 3;
-    }
+    char buf[MAXLINE], request_hdr[MAXLINE], other_hdr[MAXLINE] = "", host_hdr[MAXLINE] = "";
+    sprintf(request_hdr, requestlint_hdr_format, uri_data->path);
 
-    char *pos2 = strstr(pos, ":");
-    if (pos2 != NULL)
+    while (Rio_readlineb(client_rio, buf, MAXLINE) > 0)
     {
-        *pos2 = '\0';
-        sscanf(pos, "%s", hostname);
-        sscanf(pos2 + 1, "%d%s", port, path);
-    }
-    else
-    {
-        pos2 = strstr(pos, "/");
-        if (pos2 != NULL)
-        {
-            *pos2 = '\0';
-            sscanf(pos, "%s", hostname);
-            *pos2 = '/';
-            strcpy(path, pos2);
-        }
-        else
-        {
-            sscanf(pos, "%s", hostname);
-            strcpy(path, "/");
-        }
-    }
-}
-
-void buildRequestHeaders(const char *hostname, int port, char *headers, int connfd)
-{
-    char buf[MAXLINE];
-    rio_t rio;
-
-    // 构建请求头
-    // 如果端口不是80，则在Host头部中包含端口号
-    if (port == 80)
-    {
-        sprintf(headers, "Host: %s\r\n", hostname);
-    }
-    else
-    {
-        sprintf(headers, "Host: %s:%d\r\n", hostname, port);
-    }
-    strcat(headers, "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n");
-    strcat(headers, "Connection: close\r\n");
-    strcat(headers, "Proxy-Connection: close\r\n");
-
-    // 转发客户端的其他头部，但要避免头部重复
-    while (Rio_readlineb(&rio, buf, MAXLINE) > 0)
-    {
-        if (strcmp(buf, "\r\n") == 0)
-        {
-            break; // 头部结束
-        }
-        if (strncasecmp(buf, "Host:", 5) == 0 ||
-            strncasecmp(buf, "User-Agent:", 11) == 0 ||
-            strncasecmp(buf, "Connection:", 11) == 0 ||
-            strncasecmp(buf, "Proxy-Connection:", 17) == 0)
-        {
-            continue; // 跳过这些头部
-        }
-        strcat(headers, buf);
-
-        // Debug: 打印每行内容
         if (DEBUG)
+            printf("Header line: %s", buf);
+
+        if (strcmp(buf, endof_hdr) == 0)
         {
-            printf("Debug: Read header line: %s", buf);
+            break; // EOF
+        }
+
+        if (!strncasecmp(buf, "Host", strlen("Host")))
+        {
+            strcpy(host_hdr, buf);
+            continue;
+        }
+
+        if (!strncasecmp(buf, "Connection", strlen("Connection")) &&
+            !strncasecmp(buf, "Proxy-Connection", strlen("Proxy-Connection")) &&
+            !strncasecmp(buf, "User-Agent", strlen("User-Agent")))
+        {
+            strcat(other_hdr, buf);
         }
     }
-}
 
-int forwardRequestToServer(const char *hostname, int port, const char *headers, const char *path, const char *method, const char *version)
-{
-    int serverfd;
-    char portStr[10];
+    if (strlen(host_hdr) == 0)
+    {
+        sprintf(host_hdr, host_hdr_format, uri_data->host);
+    }
 
-    // 将端口号转换为字符串
-    sprintf(portStr, "%d", port);
+    sprintf(http_header, "%s%s%s%s%s%s%s",
+            request_hdr,
+            host_hdr,
+            conn_hdr,
+            prox_hdr,
+            User_Agent,
+            other_hdr,
+            endof_hdr);
 
     if (DEBUG)
-    {
-        printf("Debug: Connecting to server %s on port %s\n", hostname, portStr);
-    }
-
-    // 连接到服务器
-    serverfd = Open_clientfd(hostname, portStr);
-    if (serverfd < 0)
-    {
-        fprintf(stderr, "Unable to connect to server.\n");
-        if (DEBUG)
-        {
-            fprintf(stderr, "Debug: Failed to connect to server %s on port %s\n", hostname, portStr);
-        }
-        return -1;
-    }
-
-    if (DEBUG)
-    {
-        printf("Debug: Connected to server, sending request...\n");
-    }
-
-    // 构建并发送请求
-    char request[MAXLINE];
-    sprintf(request, "%s %s %s\r\n", method, path, version);
-    Rio_writen(serverfd, request, strlen(request));
-    Rio_writen(serverfd, headers, strlen(headers));
-
-    if (DEBUG)
-    {
-        printf("Debug: Request sent to server:\n%s%s\n", request, headers);
-    }
-
-    return serverfd;
-}
-
-int receiveResponseFromServer(int serverfd, char *response, int maxSize)
-{
-    int n;
-    int totalSize = 0;
-    char buf[MAXLINE];
-    rio_t rio;
-
-    // 初始化 Robust I/O 结构体
-    Rio_readinitb(&rio, serverfd);
-
-    // 读取服务器的响应
-    while ((n = Rio_readnb(&rio, buf, MAXLINE)) > 0)
-    {
-        if (totalSize + n <= maxSize)
-        {
-            memcpy(response + totalSize, buf, n);
-            totalSize += n;
-        }
-        else
-        {
-            if (DEBUG)
-            {
-                printf("Debug: Response is too large to store completely. Truncating.\n");
-            }
-            break; // 响应太大，不完全存储
-        }
-
-        if (DEBUG)
-        {
-            printf("Debug: Received %d bytes from server, total received: %d bytes\n", n, totalSize);
-        }
-    }
-
-    if (n < 0)
-    {
-        if (DEBUG)
-        {
-            printf("Debug: Error occurred while reading from server.\n");
-        }
-        return -1; // 读取错误
-    }
-
-    return totalSize; // 返回响应的大小
+        printf("Constructed HTTP Header:\n%s", http_header);
 }
 
 void *handleRequest(void *vargp)
 {
     int connfd = *((int *)vargp);
-    pthread_detach(pthread_self());
-    free(vargp);
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char server[MAXLINE];
+    rio_t rio, server_rio;
 
-    char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char hostname[MAXLINE], path[MAXLINE];
-    int serverfd, port = 8080; // 默认 Server HTTP 端口为 8080
-    char headers[MAXLINE];
+    // Initialize rio for the client connection
+    Rio_readinitb(&rio, connfd);
 
-    if (DEBUG)
-        printf("Debug: handleRequest started for fd %d\n", connfd);
-
-    // 解析请求行
-    parseRequestLine(connfd, method, uri, version);
-    if (DEBUG)
-        printf("Debug: Request Line: %s %s %s\n", method, uri, version);
-
-    // 检查缓存
-    CacheItem *item = findCacheItem(&cache, uri);
-    if (item != NULL)
+    // Read the request line
+    if (!Rio_readlineb(&rio, buf, MAXLINE))
     {
-        if (DEBUG)
-            printf("Debug: Cache hit for %s\n", uri);
-        // 缓存命中，直接发送缓存内容
-        forwardResponseToClient(connfd, item->content, item->size);
-    }
-    else
-    {
-        if (DEBUG)
-            printf("Debug: Cache miss for %s\n", uri);
-
-        // 缓存未命中，解析 URI 并构建请求头
-        parseURI(uri, hostname, path, &port);
-
-        if (DEBUG)
-        {
-            printf("Debug: Parsed URI:\n");
-            printf("  Hostname: %s\n", hostname);
-            printf("  Path: %s\n", path);
-            printf("  Port: %d\n", port);
-        }
-
-        buildRequestHeaders(hostname, port, headers, connfd);
-
-        if (DEBUG)
-        {
-            printf("Debug: Constructed request headers:\n%s\n", headers);
-        }
-
-        // 转发请求到服务器
-        serverfd = forwardRequestToServer(hostname, port, headers, path, method, version);
-        if (serverfd < 0)
-        {
-            if (DEBUG)
-                printf("Debug: Failed to connect to server %s\n", hostname);
-            close(connfd);
-            return NULL;
-        }
-
-        // 接收服务器响应
-        char serverResponse[MAX_OBJECT_SIZE];
-        int responseSize = receiveResponseFromServer(serverfd, serverResponse, MAX_OBJECT_SIZE);
-        if (DEBUG)
-            printf("Debug: Received response of size %d from server\n", responseSize);
-
-        // 存储响应到缓存
-        addCacheItem(&cache, uri, serverResponse, responseSize);
-
-        // 转发响应到客户端
-        forwardResponseToClient(connfd, serverResponse, responseSize);
-
-        // 关闭服务器套接字
-        close(serverfd);
+        fprintf(stderr, "Error reading request line\n");
+        return NULL;
     }
 
-    // 关闭客户端连接
-    close(connfd);
-    if (DEBUG)
-        printf("Debug: Connection closed for fd %d\n", connfd);
+    // Parse the request line
+    if (sscanf(buf, "%s %s %s", method, uri, version) != 3)
+    {
+        fprintf(stderr, "Invalid request line\n");
+        return NULL;
+    }
+
+    // Handle only GET requests
+    if (strcasecmp(method, "GET") != 0)
+    {
+        fprintf(stderr, "Proxy does not implement the method\n");
+        return NULL;
+    }
+
+    // Parse URI
+    struct Uri *uri_data = malloc(sizeof(struct Uri));
+    if (!uri_data)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        return NULL;
+    }
+    parse_uri(uri, uri_data);
+
+    // Build request header for the server
+    build_header(server, uri_data, &rio);
+
+    // Connect to the server
+    int serverfd = Open_clientfd(uri_data->host, uri_data->port);
+    if (serverfd < 0)
+    {
+        fprintf(stderr, "Connection to server failed\n");
+        free(uri_data);
+        return NULL;
+    }
+
+    // Forward the request to the server
+    Rio_readinitb(&server_rio, serverfd);
+    Rio_writen(serverfd, server, strlen(server));
+
+    // Forward the server's response back to the client
+    size_t n;
+    while ((n = Rio_readlineb(&server_rio, buf, MAXLINE)) != 0)
+    {
+        printf("Proxy received %zu bytes, then send\n", n);
+        Rio_writen(connfd, buf, n);
+    }
+
+    // Clean up
+    Close(serverfd);
+    free(uri_data);
+
     return NULL;
 }
