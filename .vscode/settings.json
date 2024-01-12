@@ -58,6 +58,7 @@
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "C_Cpp.errorSquiggles": "disabled",
   "files.associations": {
-    "signal.h": "c"
+    "signal.h": "c",
+    "stdio.h": "c"
   }
 }
