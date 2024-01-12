@@ -5,8 +5,6 @@
 
 #define DEBUG 1 // 设置为1以启用调试信息，设置为0以禁用
 
-Cache cache;
-
 struct Uri
 {
     char host[100];
@@ -19,6 +17,9 @@ void parseArgs(int argc, char *argv[]);
 void *handleRequest(void *vargp);
 void parse_uri(char *uri, struct Uri *uri_data);
 void build_header(char *http_header, struct Uri *uri_data, rio_t *client_rio);
+
+// Global cache variable
+Cache cache;
 
 int main(int argc, char *argv[])
 {
@@ -76,7 +77,6 @@ void parseArgs(int argc, char *argv[])
     }
 }
 
-// 解析uri
 void parse_uri(char *uri, struct Uri *uri_data)
 {
     // Initialize default values
@@ -173,6 +173,8 @@ void build_header(char *http_header, struct Uri *uri_data, rio_t *client_rio)
 void *handleRequest(void *vargp)
 {
     int connfd = *((int *)vargp);
+    free(vargp); // Assuming the caller allocated memory for connfd
+
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char server[MAXLINE];
     rio_t rio, server_rio;
@@ -201,42 +203,68 @@ void *handleRequest(void *vargp)
         return NULL;
     }
 
-    // Parse URI
-    struct Uri *uri_data = malloc(sizeof(struct Uri));
-    if (!uri_data)
+    // Check if the URI is in cache
+    CacheItem *item = findCacheItem(&cache, uri);
+    if (item)
     {
-        fprintf(stderr, "Memory allocation failed\n");
-        return NULL;
+        // If in cache, send the cached content to the client
+        Rio_writen(connfd, item->content, item->size);
     }
-    parse_uri(uri, uri_data);
-
-    // Build request header for the server
-    build_header(server, uri_data, &rio);
-
-    // Connect to the server
-    int serverfd = Open_clientfd(uri_data->host, uri_data->port);
-    if (serverfd < 0)
+    else
     {
-        fprintf(stderr, "Connection to server failed\n");
+        // If not in cache, proceed with handling the request
+        struct Uri *uri_data = malloc(sizeof(struct Uri));
+        if (!uri_data)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            return NULL;
+        }
+        parse_uri(uri, uri_data);
+
+        // Build request header for the server
+        build_header(server, uri_data, &rio);
+
+        // Connect to the server
+        int serverfd = Open_clientfd(uri_data->host, uri_data->port);
+        if (serverfd < 0)
+        {
+            fprintf(stderr, "Connection to server failed\n");
+            free(uri_data);
+            return NULL;
+        }
+
+        // Forward the request to the server
+        Rio_readinitb(&server_rio, serverfd);
+        Rio_writen(serverfd, server, strlen(server));
+
+        // Forward the server's response back to the client and cache it
+        char *response = malloc(MAXLINE); // Allocate memory for caching
+        size_t total_size = 0;
+        ssize_t n;
+        while ((n = Rio_readlineb(&server_rio, buf, MAXLINE)) != 0)
+        {
+            Rio_writen(connfd, buf, n);
+            // Append to response buffer for caching
+            if (response)
+            {
+                response = realloc(response, total_size + n);
+                memcpy(response + total_size, buf, n);
+                total_size += n;
+            }
+        }
+
+        // Add the response to cache
+        if (response)
+        {
+            addCacheItem(&cache, uri, response, total_size);
+            free(response); // Free the temporary response buffer
+        }
+
+        // Clean up
+        Close(serverfd);
         free(uri_data);
-        return NULL;
     }
 
-    // Forward the request to the server
-    Rio_readinitb(&server_rio, serverfd);
-    Rio_writen(serverfd, server, strlen(server));
-
-    // Forward the server's response back to the client
-    size_t n;
-    while ((n = Rio_readlineb(&server_rio, buf, MAXLINE)) != 0)
-    {
-        printf("Proxy received %zu bytes, then send\n", n);
-        Rio_writen(connfd, buf, n);
-    }
-
-    // Clean up
-    Close(serverfd);
-    free(uri_data);
-
+    Close(connfd); // Close client connection
     return NULL;
 }
