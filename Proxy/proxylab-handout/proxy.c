@@ -3,7 +3,7 @@
 #include "cache.h"
 #include "csapp.h"
 
-#define DEBUG 1 // 设置为1以启用调试信息，设置为0以禁用
+#define DEBUG 0 // 设置为1以启用调试信息，设置为0以禁用
 
 // Global cache variable
 Cache cache;
@@ -216,15 +216,16 @@ void *handleRequest(void *vargp)
 
     // Check if the generated cache key is in cache
     CacheItem *item = findCacheItem(&cache, cache_key);
-    printCache(&cache);
+
+    if (DEBUG)
+        printCache(&cache);
+
     if (item)
     {
-        // If in cache, send the cached content to the client
         Rio_writen(connfd, item->content, item->size);
     }
     else
     {
-        // Build request header for the server
         build_header(server, uri_data, &rio);
 
         // Connect to the server
@@ -268,6 +269,6 @@ void *handleRequest(void *vargp)
         free(uri_data);
     }
 
-    Close(connfd); // Close client connection
+    Close(connfd);
     return NULL;
 }
