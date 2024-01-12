@@ -5,6 +5,9 @@
 
 #define DEBUG 1 // 设置为1以启用调试信息，设置为0以禁用
 
+// Global cache variable
+Cache cache;
+
 struct Uri
 {
     char host[100];
@@ -12,14 +15,10 @@ struct Uri
     char path[100];
 };
 
-/* Function to parse command line arguments */
 void parseArgs(int argc, char *argv[]);
 void *handleRequest(void *vargp);
 void parse_uri(char *uri, struct Uri *uri_data);
 void build_header(char *http_header, struct Uri *uri_data, rio_t *client_rio);
-
-// Global cache variable
-Cache cache;
 
 int main(int argc, char *argv[])
 {
@@ -31,7 +30,6 @@ int main(int argc, char *argv[])
 
     parseArgs(argc, argv);
 
-    // 初始化全局变量 cache
     initCache(&cache);
 
     listenfd = Open_listenfd(argv[1]);
@@ -203,8 +201,22 @@ void *handleRequest(void *vargp)
         return NULL;
     }
 
-    // Check if the URI is in cache
-    CacheItem *item = findCacheItem(&cache, uri);
+    // Parse the URI to get the host, port, and path
+    struct Uri *uri_data = malloc(sizeof(struct Uri));
+    if (!uri_data)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        return NULL;
+    }
+    parse_uri(uri, uri_data);
+
+    // Generate the cache key as a combination of host, port, and path
+    char cache_key[MAXLINE];
+    snprintf(cache_key, sizeof(cache_key), "%s:%s%s", uri_data->host, uri_data->port, uri_data->path);
+
+    // Check if the generated cache key is in cache
+    CacheItem *item = findCacheItem(&cache, cache_key);
+    printCache(&cache);
     if (item)
     {
         // If in cache, send the cached content to the client
@@ -212,15 +224,6 @@ void *handleRequest(void *vargp)
     }
     else
     {
-        // If not in cache, proceed with handling the request
-        struct Uri *uri_data = malloc(sizeof(struct Uri));
-        if (!uri_data)
-        {
-            fprintf(stderr, "Memory allocation failed\n");
-            return NULL;
-        }
-        parse_uri(uri, uri_data);
-
         // Build request header for the server
         build_header(server, uri_data, &rio);
 
@@ -256,7 +259,7 @@ void *handleRequest(void *vargp)
         // Add the response to cache
         if (response)
         {
-            addCacheItem(&cache, uri, response, total_size);
+            addCacheItem(&cache, cache_key, response, total_size);
             free(response); // Free the temporary response buffer
         }
 

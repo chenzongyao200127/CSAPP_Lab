@@ -178,3 +178,28 @@ void addCacheItem(Cache *cache, const char *url, const char *content, size_t siz
     // Release the read lock
     pthread_rwlock_unlock(&cache->lock);
 }
+
+void printCache(Cache *cache)
+{
+    // Acquire the read lock to ensure thread safety
+    pthread_rwlock_rdlock(&cache->lock);
+
+    printf("Cache Contents (Total Size: %lu):\n", cache->totalSize);
+    printf("-----------------------------------\n");
+
+    // Traverse the list from head to tail
+    CacheItem *current = cache->head;
+    while (current != NULL)
+    {
+        printf("URL: %s\n", current->url);
+        // printf("Content: %s\n", current->content);
+        printf("Size: %lu\n", current->size);
+        printf("-----------------------------------\n");
+
+        // Move to the next item
+        current = current->next;
+    }
+
+    // Release the read lock
+    pthread_rwlock_unlock(&cache->lock);
+}

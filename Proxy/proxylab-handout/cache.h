@@ -32,5 +32,6 @@ void freeCache(Cache *cache);
 CacheItem *findCacheItem(Cache *cache, const char *url);
 void addCacheItem(Cache *cache, const char *url, const char *content, size_t size);
 void removeOldestCacheItem(Cache *cache);
+void printCache(Cache *cache);
 
 #endif // CACHE_H
