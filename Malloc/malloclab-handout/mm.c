@@ -391,9 +391,7 @@ void *mm_realloc(void *ptr, size_t size)
 
     /* If realloc() fails the original block is left untouched  */
     if (!newptr)
-    {
         return 0;
-    }
 
     /* Copy the old data. */
     oldsize = GET_SIZE(HDRP(ptr));
